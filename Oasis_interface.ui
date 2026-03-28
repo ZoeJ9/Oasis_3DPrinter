@@ -1,0 +1,549 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<ui version="4.0">
+ <class>MainWindow</class>
+ <widget class="QMainWindow" name="MainWindow">
+  <property name="geometry">
+   <rect>
+    <x>0</x>
+    <y>0</y>
+    <width>800</width>
+    <height>440</height>
+   </rect>
+  </property>
+  <property name="minimumSize">
+   <size>
+    <width>800</width>
+    <height>440</height>
+   </size>
+  </property>
+  <property name="windowTitle">
+   <string>MainWindow</string>
+  </property>
+  <widget class="QWidget" name="centralwidget">
+   <layout class="QGridLayout" name="gridLayout">
+    <property name="margin">
+     <number>4</number>
+    </property>
+    <property name="spacing">
+     <number>4</number>
+    </property>
+
+    <!-- Input Image (row 0-1, col 0) -->
+    <item row="0" column="0" rowspan="2">
+     <widget class="QGroupBox" name="group_input">
+      <property name="title">
+       <string>Input Image</string>
+      </property>
+      <layout class="QVBoxLayout">
+       <item>
+        <widget class="QLabel" name="input_window">
+         <property name="text">
+          <string/>
+         </property>
+         <property name="scaledContents">
+          <bool>false</bool>
+         </property>
+         <property name="alignment">
+          <set>Qt::AlignCenter</set>
+         </property>
+        </widget>
+       </item>
+      </layout>
+     </widget>
+    </item>
+
+    <!-- Output Image (row 0-1, col 1) -->
+    <item row="0" column="1" rowspan="2">
+     <widget class="QGroupBox" name="group_output">
+      <property name="title">
+       <string>Output Image</string>
+      </property>
+      <layout class="QVBoxLayout">
+       <item>
+        <widget class="QLabel" name="output_window">
+         <property name="text">
+          <string/>
+         </property>
+         <property name="scaledContents">
+          <bool>true</bool>
+         </property>
+         <property name="alignment">
+          <set>Qt::AlignCenter</set>
+         </property>
+        </widget>
+       </item>
+      </layout>
+     </widget>
+    </item>
+
+    <!-- Motion Control (row 0, col 2) -->
+    <item row="0" column="2">
+     <widget class="QGroupBox" name="group_motion">
+      <property name="title">
+       <string>Motion Control</string>
+      </property>
+      <layout class="QGridLayout">
+       <property name="margin">
+        <number>4</number>
+       </property>
+       <property name="spacing">
+        <number>3</number>
+       </property>
+       <!-- Row 0: port combo + refresh + connect -->
+       <item row="0" column="0" colspan="2">
+        <widget class="QComboBox" name="motion_set_port">
+         <property name="currentText">
+          <string>COM11</string>
+         </property>
+         <property name="currentIndex">
+          <number>10</number>
+         </property>
+         <property name="maxVisibleItems">
+          <number>12</number>
+         </property>
+         <item><property name="text"><string>COM1</string></property></item>
+         <item><property name="text"><string>COM2</string></property></item>
+         <item><property name="text"><string>COM3</string></property></item>
+         <item><property name="text"><string>COM4</string></property></item>
+         <item><property name="text"><string>COM5</string></property></item>
+         <item><property name="text"><string>COM6</string></property></item>
+         <item><property name="text"><string>COM7</string></property></item>
+         <item><property name="text"><string>COM8</string></property></item>
+         <item><property name="text"><string>COM9</string></property></item>
+         <item><property name="text"><string>COM10</string></property></item>
+         <item><property name="text"><string>COM11</string></property></item>
+         <item><property name="text"><string>COM12</string></property></item>
+         <item><property name="text"><string>COM13</string></property></item>
+         <item><property name="text"><string>COM14</string></property></item>
+         <item><property name="text"><string>COM15</string></property></item>
+         <item><property name="text"><string>COM16</string></property></item>
+        </widget>
+       </item>
+       <item row="0" column="2">
+        <widget class="QPushButton" name="motion_refresh">
+         <property name="text"><string>Refresh</string></property>
+        </widget>
+       </item>
+       <item row="0" column="3">
+        <widget class="QPushButton" name="motion_connect">
+         <property name="text"><string>Connect</string></property>
+        </widget>
+       </item>
+       <!-- Row 1: Home, Y+, Spreader -->
+       <item row="1" column="0" colspan="2">
+        <widget class="QPushButton" name="motion_home">
+         <property name="text"><string>Home</string></property>
+        </widget>
+       </item>
+       <item row="1" column="2">
+        <widget class="QPushButton" name="motion_yp">
+         <property name="text"><string>Y+</string></property>
+        </widget>
+       </item>
+       <item row="1" column="3">
+        <widget class="QPushButton" name="motion_spreader">
+         <property name="text"><string>Spreader on</string></property>
+        </widget>
+       </item>
+       <!-- Row 2: X-, Goto home, X+ -->
+       <item row="2" column="0" colspan="2">
+        <widget class="QPushButton" name="motion_xn">
+         <property name="text"><string>X-</string></property>
+        </widget>
+       </item>
+       <item row="2" column="2">
+        <widget class="QPushButton" name="motion_goto_home">
+         <property name="text"><string>Goto home</string></property>
+        </widget>
+       </item>
+       <item row="2" column="3">
+        <widget class="QPushButton" name="motion_xp">
+         <property name="text"><string>X+</string></property>
+        </widget>
+       </item>
+       <!-- Row 3: Feed up, Y-, Build up -->
+       <item row="3" column="0" colspan="2">
+        <widget class="QPushButton" name="motion_fu">
+         <property name="text"><string>Feed up</string></property>
+        </widget>
+       </item>
+       <item row="3" column="2">
+        <widget class="QPushButton" name="motion_yn">
+         <property name="text"><string>Y-</string></property>
+        </widget>
+       </item>
+       <item row="3" column="3">
+        <widget class="QPushButton" name="motion_bu">
+         <property name="text"><string>Build up</string></property>
+        </widget>
+       </item>
+       <!-- Row 4: Feed down, Build down -->
+       <item row="4" column="0" colspan="2">
+        <widget class="QPushButton" name="motion_fd">
+         <property name="text"><string>Feed down</string></property>
+        </widget>
+       </item>
+       <item row="4" column="3">
+        <widget class="QPushButton" name="motion_bd">
+         <property name="text"><string>Build down</string></property>
+        </widget>
+       </item>
+       <!-- Row 5: New layer label + button -->
+       <item row="5" column="0" colspan="3">
+        <widget class="QLabel" name="motion_layer_value">
+         <property name="text"><string>New layer: 0.10 mm</string></property>
+        </widget>
+       </item>
+       <item row="5" column="3">
+        <widget class="QPushButton" name="motion_new_layer">
+         <property name="text"><string>New layer</string></property>
+        </widget>
+       </item>
+       <!-- Row 6: layer thickness slider + prime -->
+       <item row="6" column="0" colspan="3">
+        <widget class="QSlider" name="motion_layer_thickness">
+         <property name="minimum"><number>1</number></property>
+         <property name="maximum"><number>20</number></property>
+         <property name="pageStep"><number>1</number></property>
+         <property name="value"><number>2</number></property>
+         <property name="orientation"><enum>Qt::Horizontal</enum></property>
+        </widget>
+       </item>
+       <item row="6" column="3">
+        <widget class="QPushButton" name="motion_prime_layer">
+         <property name="text"><string>Prime layer</string></property>
+        </widget>
+       </item>
+       <!-- Row 7: overfeed label + set button -->
+       <item row="7" column="0" colspan="3">
+        <widget class="QLabel" name="motion_overfeed_value">
+         <property name="text"><string>Overfeed: 110%</string></property>
+        </widget>
+       </item>
+       <item row="7" column="3">
+        <widget class="QPushButton" name="motion_set_overfeed">
+         <property name="text"><string>Set Overfeed</string></property>
+        </widget>
+       </item>
+       <!-- Row 8: overfeed slider -->
+       <item row="8" column="0" colspan="4">
+        <widget class="QSlider" name="motion_overfeed">
+         <property name="minimum"><number>0</number></property>
+         <property name="maximum"><number>14</number></property>
+         <property name="singleStep"><number>1</number></property>
+         <property name="pageStep"><number>1</number></property>
+         <property name="value"><number>6</number></property>
+         <property name="orientation"><enum>Qt::Horizontal</enum></property>
+        </widget>
+       </item>
+      </layout>
+     </widget>
+    </item>
+
+    <!-- Inkjet Control (row 1, col 2) -->
+    <item row="1" column="2">
+     <widget class="QGroupBox" name="group_inkjet">
+      <property name="title">
+       <string>Inkjet Control</string>
+      </property>
+      <layout class="QGridLayout">
+       <property name="margin">
+        <number>4</number>
+       </property>
+       <property name="spacing">
+        <number>3</number>
+       </property>
+       <!-- Row 0: port + refresh + connect -->
+       <item row="0" column="0" colspan="2">
+        <widget class="QComboBox" name="inkjet_set_port">
+         <property name="currentText">
+          <string>COM6</string>
+         </property>
+         <property name="currentIndex">
+          <number>5</number>
+         </property>
+         <property name="maxVisibleItems">
+          <number>12</number>
+         </property>
+         <item><property name="text"><string>COM1</string></property></item>
+         <item><property name="text"><string>COM2</string></property></item>
+         <item><property name="text"><string>COM3</string></property></item>
+         <item><property name="text"><string>COM4</string></property></item>
+         <item><property name="text"><string>COM5</string></property></item>
+         <item><property name="text"><string>COM6</string></property></item>
+         <item><property name="text"><string>COM7</string></property></item>
+         <item><property name="text"><string>COM8</string></property></item>
+         <item><property name="text"><string>COM9</string></property></item>
+         <item><property name="text"><string>COM10</string></property></item>
+         <item><property name="text"><string>COM11</string></property></item>
+         <item><property name="text"><string>COM12</string></property></item>
+         <item><property name="text"><string>COM13</string></property></item>
+         <item><property name="text"><string>COM14</string></property></item>
+         <item><property name="text"><string>COM15</string></property></item>
+         <item><property name="text"><string>COM16</string></property></item>
+        </widget>
+       </item>
+       <item row="0" column="2">
+        <widget class="QPushButton" name="inkjet_refresh">
+         <property name="text"><string>Refresh</string></property>
+        </widget>
+       </item>
+       <item row="0" column="3">
+        <widget class="QPushButton" name="inkjet_connect">
+         <property name="text"><string>Connect</string></property>
+        </widget>
+       </item>
+       <!-- Row 1: set pos, preheat, prime -->
+       <item row="1" column="0" colspan="2">
+        <widget class="QPushButton" name="inkjet_set_pos">
+         <property name="text"><string>Set position</string></property>
+        </widget>
+       </item>
+       <item row="1" column="2">
+        <widget class="QPushButton" name="inkjet_preheat">
+         <property name="text"><string>Preheat</string></property>
+        </widget>
+       </item>
+       <item row="1" column="3">
+        <widget class="QPushButton" name="inkjet_prime">
+         <property name="text"><string>Prime</string></property>
+        </widget>
+       </item>
+       <!-- Row 2: density label + set density -->
+       <item row="2" column="0" colspan="3">
+        <widget class="QLabel" name="inket_density_value">
+         <property name="text"><string>Density: 100%</string></property>
+        </widget>
+       </item>
+       <item row="2" column="3">
+        <widget class="QPushButton" name="inkjet_set_density">
+         <property name="text"><string>Set Density</string></property>
+        </widget>
+       </item>
+       <!-- Row 3: density slider -->
+       <item row="3" column="0" colspan="4">
+        <widget class="QSlider" name="inkjet_density">
+         <property name="minimum"><number>1</number></property>
+         <property name="maximum"><number>100</number></property>
+         <property name="value"><number>10</number></property>
+         <property name="orientation"><enum>Qt::Horizontal</enum></property>
+        </widget>
+       </item>
+       <!-- Row 4: test button + state -->
+       <item row="4" column="0" colspan="2">
+        <widget class="QPushButton" name="inkjet_test_button">
+         <property name="text"><string>Test head</string></property>
+        </widget>
+       </item>
+       <item row="4" column="2" colspan="2">
+        <widget class="QLineEdit" name="inkjet_test_state">
+         <property name="readOnly"><bool>true</bool></property>
+        </widget>
+       </item>
+      </layout>
+     </widget>
+    </item>
+
+    <!-- File Control (row 2, col 0) -->
+    <item row="2" column="0">
+     <widget class="QGroupBox" name="group_file">
+      <property name="title">
+       <string>File control</string>
+      </property>
+      <layout class="QGridLayout">
+       <property name="margin">
+        <number>4</number>
+       </property>
+       <property name="spacing">
+        <number>3</number>
+       </property>
+       <item row="0" column="0">
+        <widget class="QPushButton" name="file_open_button">
+         <property name="text"><string>Open File</string></property>
+        </widget>
+       </item>
+       <item row="0" column="1">
+        <widget class="QPushButton" name="file_convert_button">
+         <property name="text"><string>Convert</string></property>
+        </widget>
+       </item>
+       <item row="0" column="2">
+        <widget class="QPushButton" name="file_show_full_button">
+         <property name="enabled"><bool>false</bool></property>
+         <property name="text"><string>Show 100%</string></property>
+        </widget>
+       </item>
+       <item row="1" column="0" colspan="3">
+        <widget class="QSlider" name="threshold_slider">
+         <property name="minimum"><number>1</number></property>
+         <property name="maximum"><number>255</number></property>
+         <property name="value"><number>128</number></property>
+         <property name="orientation"><enum>Qt::Horizontal</enum></property>
+        </widget>
+       </item>
+       <item row="2" column="0" colspan="3">
+        <widget class="QLabel" name="threshold_slider_value">
+         <property name="text"><string>Threshold: 128</string></property>
+        </widget>
+       </item>
+       <item row="3" column="0">
+        <widget class="QLabel" name="file_dimensions_title">
+         <property name="text"><string>File dimensions</string></property>
+        </widget>
+       </item>
+       <item row="3" column="1" colspan="2">
+        <widget class="QLineEdit" name="file_dimensions">
+         <property name="readOnly"><bool>true</bool></property>
+        </widget>
+       </item>
+      </layout>
+     </widget>
+    </item>
+
+    <!-- Print Control (row 2, col 1) -->
+    <item row="2" column="1">
+     <widget class="QGroupBox" name="group_print">
+      <property name="title">
+       <string>Print Control</string>
+      </property>
+      <layout class="QGridLayout">
+       <property name="margin">
+        <number>4</number>
+       </property>
+       <property name="spacing">
+        <number>3</number>
+       </property>
+       <!-- Row 0: layer slider + value -->
+       <item row="0" column="0" colspan="3">
+        <widget class="QSlider" name="layer_slider">
+         <property name="minimum"><number>1</number></property>
+         <property name="maximum"><number>100</number></property>
+         <property name="value"><number>1</number></property>
+         <property name="orientation"><enum>Qt::Horizontal</enum></property>
+        </widget>
+       </item>
+       <item row="0" column="3">
+        <widget class="QLabel" name="layer_slider_value">
+         <property name="text"><string>Layer: 0</string></property>
+        </widget>
+       </item>
+       <!-- Row 1: DPI title, Sweeps title, Mode title -->
+       <item row="1" column="0">
+        <widget class="QLabel" name="dpi_title">
+         <property name="text"><string>Data DPI</string></property>
+        </widget>
+       </item>
+       <item row="1" column="1">
+        <widget class="QLabel" name="sweeps_title">
+         <property name="text"><string>Sweeps per area</string></property>
+        </widget>
+       </item>
+       <item row="1" column="2" colspan="2">
+        <widget class="QLabel" name="mode_title">
+         <property name="text"><string>Printing mode</string></property>
+        </widget>
+       </item>
+       <!-- Row 2: DPI combo, sweep combo, mode combo -->
+       <item row="2" column="0">
+        <widget class="QComboBox" name="dpi_combo">
+         <property name="toolTip">
+          <string>At what DPI the image is sent to the printhead.</string>
+         </property>
+         <item><property name="text"><string>600 DPI</string></property></item>
+         <item><property name="text"><string>300 DPI</string></property></item>
+         <item><property name="text"><string>200 DPI</string></property></item>
+         <item><property name="text"><string>150 DPI</string></property></item>
+         <item><property name="text"><string>100 DPI</string></property></item>
+         <item><property name="text"><string>75 DPI</string></property></item>
+        </widget>
+       </item>
+       <item row="2" column="1">
+        <widget class="QComboBox" name="sweep_combo">
+         <property name="enabled"><bool>false</bool></property>
+         <item><property name="text"><string>1 Sweep</string></property></item>
+         <item><property name="text"><string>2 Sweeps</string></property></item>
+         <item><property name="text"><string>3 Sweeps</string></property></item>
+         <item><property name="text"><string>4 Sweeps</string></property></item>
+         <item><property name="text"><string>5 Sweeps</string></property></item>
+        </widget>
+       </item>
+       <item row="2" column="2" colspan="2">
+        <widget class="QComboBox" name="mode_combo">
+         <property name="enabled"><bool>false</bool></property>
+         <item><property name="text"><string>3D Printing</string></property></item>
+         <item><property name="text"><string>2D Printing</string></property></item>
+         <item><property name="text"><string>Inkjet Only</string></property></item>
+        </widget>
+       </item>
+       <!-- Row 3: Print, Pause, Abort -->
+       <item row="3" column="0">
+        <widget class="QPushButton" name="file_print_button">
+         <property name="text"><string>Print</string></property>
+        </widget>
+       </item>
+       <item row="3" column="1">
+        <widget class="QPushButton" name="pause_button">
+         <property name="text"><string>Pause</string></property>
+        </widget>
+       </item>
+       <item row="3" column="2" colspan="2">
+        <widget class="QPushButton" name="abort_button">
+         <property name="text"><string>Abort</string></property>
+        </widget>
+       </item>
+      </layout>
+     </widget>
+    </item>
+
+    <!-- row/col stretch -->
+    <item row="2" column="2">
+     <spacer>
+      <property name="orientation"><enum>Qt::Vertical</enum></property>
+      <property name="sizeHint" stdset="0"><size><width>0</width><height>0</height></size></property>
+     </spacer>
+    </item>
+
+   </layout>
+  </widget>
+  <widget class="QStatusBar" name="statusBar"/>
+ </widget>
+ <tabstops>
+  <tabstop>motion_set_port</tabstop>
+  <tabstop>motion_connect</tabstop>
+  <tabstop>motion_home</tabstop>
+  <tabstop>motion_yp</tabstop>
+  <tabstop>motion_spreader</tabstop>
+  <tabstop>motion_xn</tabstop>
+  <tabstop>motion_goto_home</tabstop>
+  <tabstop>motion_xp</tabstop>
+  <tabstop>motion_fu</tabstop>
+  <tabstop>motion_yn</tabstop>
+  <tabstop>motion_bu</tabstop>
+  <tabstop>motion_fd</tabstop>
+  <tabstop>motion_bd</tabstop>
+  <tabstop>motion_layer_thickness</tabstop>
+  <tabstop>motion_new_layer</tabstop>
+  <tabstop>motion_prime_layer</tabstop>
+  <tabstop>motion_overfeed</tabstop>
+  <tabstop>motion_set_overfeed</tabstop>
+  <tabstop>inkjet_set_port</tabstop>
+  <tabstop>inkjet_connect</tabstop>
+  <tabstop>inkjet_set_pos</tabstop>
+  <tabstop>inkjet_preheat</tabstop>
+  <tabstop>inkjet_prime</tabstop>
+  <tabstop>inkjet_density</tabstop>
+  <tabstop>inkjet_set_density</tabstop>
+  <tabstop>inkjet_test_button</tabstop>
+  <tabstop>inkjet_test_state</tabstop>
+  <tabstop>file_open_button</tabstop>
+  <tabstop>file_convert_button</tabstop>
+  <tabstop>threshold_slider</tabstop>
+  <tabstop>layer_slider</tabstop>
+  <tabstop>dpi_combo</tabstop>
+  <tabstop>file_print_button</tabstop>
+  <tabstop>pause_button</tabstop>
+  <tabstop>abort_button</tabstop>
+ </tabstops>
+ <resources/>
+ <connections/>
+</ui>
