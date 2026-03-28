@@ -1,6 +1,6 @@
 # Oasis_3DPrinter
 
-This repository is a control stack for the Oasis 3D printer / powder-bed inkjet proof-of-concept printer.
+This repository is a control stack for the Oasis 3D printer / powder-bed inkjet printer.
 
 The main GUI and print engine is in `Oasis_printer_260327.py` and supports:
 
