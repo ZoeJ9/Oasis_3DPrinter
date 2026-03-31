@@ -596,7 +596,7 @@ def apply_config_to_window(window: Any, config: Dict[str, Any]) -> None:
 try:
     # Only import Qt types when oasis_layer_repeat_and_camera_ruff_formatted is on the path.
     # This lets the loader module be imported (and tested) without PyQt5.
-    from oasis_layer_repeat_and_camera_ruff_formatted_v3 import MainWindow  # type: ignore[import]
+    from Oasis_printer_260327 import MainWindow  # type: ignore[import]
 
     class ConfigurableMainWindow(MainWindow):  # type: ignore[misc]
         """
@@ -720,7 +720,6 @@ def launch_print(
 
     # Inject CSV parameters into the GUI (must be done before COM port / file connection)
     gui.lock_params(config, params)
-    gui.show()
     log.info("Config injected. Use the GUI to open a file, connect ports, and start print.")
 
     # Start the Qt event loop — exits cleanly when the window is closed
