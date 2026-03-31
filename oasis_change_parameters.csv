@@ -2,7 +2,7 @@ parameter_name,Type of variable,value,unit,min,max,category,description,code_var
 print_speed,Variance,2200,mm/min,100,10000,Motion,Printing sweep speed,self.print_speed
 travel_speed,fixed,3000,mm/min,100,5000,Motion,Travel (non-printing) speed,self.travel_speed
 layer_thickness,Variance,0.1,mm,0.05,2,Motion,Layer thickness (0.05 mm per slider unit),motion_layer_thickness
-layer_passes,Variance ,2,-,1,5,How many times repeat for one layer print ,layer_passes,
+layer_passes,Variance ,3,-,1,5,How many times repeat for one layer print ,layer_passes,
 overfeed_percent,Variance,100,%,175,500,Motion,Powder overfeed percentage (80 + slider*5),motion_overfeed
 jog_xy_distance,fixed,10,mm,-,-,Motion,XY jog step distance,grbl.Jog
 jog_xy_speed,fixed,6000,mm/min,-,-,Motion,XY jog speed,grbl.Jog
