@@ -362,6 +362,7 @@ class MainWindow(QtWidgets.QMainWindow):
         self.form.abort_button.clicked.connect(self.AbortPrint)
         # self.form.file_print_button.clicked.connect(self.RenderRGB)
         self.form.layer_slider.valueChanged.connect(self.UpdateLayer)
+        self.form.start_layer_spinbox.setEnabled(False)  # disabled until file is loaded
         self.form.threshold_slider.valueChanged.connect(self.UpdateThresholdSliderValue)
         self.form.motion_layer_thickness.valueChanged.connect(
             self.UpdateLayerSliderValue
@@ -707,6 +708,9 @@ class MainWindow(QtWidgets.QMainWindow):
         if temp_response == 2:
             self.file_loaded = 2
             self.form.layer_slider.setMaximum(self.imageconverter.svg_layers - 1)
+            self.form.start_layer_spinbox.setMaximum(self.imageconverter.svg_layers)
+            self.form.start_layer_spinbox.setValue(1)
+            self.form.start_layer_spinbox.setEnabled(True)
             self.RenderOutput()
 
     def UpdateLayer(self):
@@ -887,8 +891,9 @@ class MainWindow(QtWidgets.QMainWindow):
                 self.imageconverter.image_array_width
             )  # the max size of image, in Y-direction
             self.layers = self.imageconverter.svg_layers  # how many layers there are
-            self.current_layer = 1  # the currently printed layer
-            self.current_layer_height = self.imageconverter.svg_layer_height[0]
+            start_layer = max(1, min(self.form.start_layer_spinbox.value(), self.layers))
+            self.current_layer = start_layer
+            self.current_layer_height = self.imageconverter.svg_layer_height[start_layer - 1]
             print("Starting print at height: " + str(self.current_layer_height))
 
             # set flags
