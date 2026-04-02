@@ -1295,6 +1295,22 @@ class MainWindow(QtWidgets.QMainWindow):
                     print("Print aborted")
                     break
 
+                # --- Photo After Printing (Ink Deposition) ---
+                # Capture immediately after ink sweeps, before NewLayer() starts spreading
+                if hasattr(self, "camera_window"):
+                    self.grbl.SerialGotoHome(self.travel_speed)
+                    self.grbl.StatusIndexSet()
+                    while True:
+                        time.sleep(0.1)
+                        if (
+                            self.grbl.StatusIndexChanged() == 1
+                            and self.grbl.motion_state == "idle"
+                        ):
+                            break
+                    self.camera_window.capture_sync(
+                        f"Layer_{self.current_layer - 1:03d}_Printed"
+                    )
+
                 # Add next layer — nl_state set to 0 inside NewLayer()
                 temp_layer_thickness = (
                     self.imageconverter.svg_layer_height[self.current_layer]
@@ -1305,28 +1321,6 @@ class MainWindow(QtWidgets.QMainWindow):
                     self.current_layer
                 ]
                 self.grbl.NewLayer(temp_layer_thickness)
-
-                # Wait for NewLayer() to complete (nl_state → 1) before taking photo
-                while self.grbl.nl_state == 0:
-                    time.sleep(0.1)
-
-                # Move to home for photo after recoating
-                print("Moving to home for photo...")
-                self.grbl.SerialGotoHome(self.travel_speed)
-                self.grbl.StatusIndexSet()
-                while True:
-                    time.sleep(0.1)
-                    if (
-                        self.grbl.StatusIndexChanged() == 1
-                        and self.grbl.motion_state == "idle"
-                    ):
-                        break
-
-                # --- Photo After Printing (Ink Deposition) ---
-                if hasattr(self, "camera_window"):
-                    self.camera_window.capture_sync(
-                        f"Layer_{self.current_layer - 1:03d}_Printed"
-                    )
 
             # if all layers printed or stop button pressed, exit
             if (
