@@ -385,6 +385,9 @@ class MainWindow(QtWidgets.QMainWindow):
 
         self.form.statusBar.addPermanentWidget(QLabel(" "), 5)
 
+        self.bed_size_label = QLabel("No file loaded")
+        self.form.statusBar.addPermanentWidget(self.bed_size_label, 6)
+
         self.form.statusBar.addPermanentWidget(self.inkjet_label, 1)
         self.form.statusBar.addPermanentWidget(self.inkjet_y_pos, 1)
         self.form.statusBar.addPermanentWidget(self.inkjet_temperature, 1)
@@ -764,12 +767,12 @@ class MainWindow(QtWidgets.QMainWindow):
         fits = diagonal <= BED_DIAMETER_MM
         fit_str = "FITS" if fits else f"EXCEEDS BED (diagonal {diagonal:.1f} mm)"
         status = (
-            f"Print size: {w:.1f} x {h:.1f} mm  |  "
+            f"Print: {w:.1f} x {h:.1f} mm  |  "
             f"Layers: {layers}  |  "
-            f"Bed: {BED_DIAMETER_MM:.0f} mm dia (10\")  |  "
+            f"Bed: {BED_DIAMETER_MM:.0f} mm (10\")  |  "
             f"{fit_str}"
         )
-        self.form.statusBar.showMessage(status)
+        self.bed_size_label.setText(status)
 
     def UpdateLayer(self):
         if (
