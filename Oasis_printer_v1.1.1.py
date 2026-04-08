@@ -756,8 +756,8 @@ class MainWindow(QtWidgets.QMainWindow):
             self._UpdateBedSizeStatus()
 
     def _UpdateBedSizeStatus(self):
-        """Show print dimensions vs 10-inch circular bed in the status bar."""
-        BED_DIAMETER_MM = 254.0  # 10 inch circular bed
+        """Show print dimensions vs 84mm circular bed in the status bar."""
+        BED_DIAMETER_MM = 84.0
         w = self.imageconverter.svg_width   # mm
         h = self.imageconverter.svg_height  # mm
         layers = self.imageconverter.svg_layers
@@ -765,11 +765,11 @@ class MainWindow(QtWidgets.QMainWindow):
         # Diagonal of the bounding box — worst case for a circular bed
         diagonal = math.sqrt(w ** 2 + h ** 2)
         fits = diagonal <= BED_DIAMETER_MM
-        fit_str = "FITS" if fits else f"EXCEEDS BED (diagonal {diagonal:.1f} mm)"
+        fit_str = "✓ FITS" if fits else f"⚠ EXCEEDS BED (diagonal {diagonal:.1f} mm)"
         status = (
             f"Print: {w:.1f} x {h:.1f} mm  |  "
             f"Layers: {layers}  |  "
-            f"Bed: {BED_DIAMETER_MM:.0f} mm (10\")  |  "
+            f"Bed: {BED_DIAMETER_MM:.0f} mm dia  |  "
             f"{fit_str}"
         )
         self.bed_size_label.setText(status)
