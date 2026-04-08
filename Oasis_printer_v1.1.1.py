@@ -836,14 +836,82 @@ class MainWindow(QtWidgets.QMainWindow):
         if self.file_loaded == 2:
             self.imageconverter.ArrayToImage()
             self.output_image_display = self.imageconverter.output_image
-            if (
-                self.output_image_display.width() > 300
-                and self.output_image_display.height() > 300
-            ):
-                self.output_image_display = self.output_image_display.scaled(
-                    300, 300, QtCore.Qt.KeepAspectRatio
-                )
-            self.form.output_window.setPixmap(self.output_image_display)
+            overlay = self._RenderBedOverlay(self.output_image_display)
+            self.form.output_window.setPixmap(overlay)
+
+    def _RenderBedOverlay(self, svg_pixmap):
+        """Composite the SVG pattern onto a circular bed preview.
+
+        The bed (84 mm dia) is drawn as a light-grey filled circle.
+        The SVG bounding box is centered on the bed (matching build_center/svg_offset logic).
+        The SVG pattern image is painted inside that bounding box.
+        Returns a 300x300 QPixmap.
+        """
+        from PyQt5.QtGui import QPainter, QColor, QPen, QBrush
+        from PyQt5.QtCore import Qt, QRectF
+
+        CANVAS = 300
+        BED_DIAMETER_MM = 84.0
+
+        svg_w_mm = self.imageconverter.svg_width   # mm
+        svg_h_mm = self.imageconverter.svg_height  # mm
+
+        # Scale factor: fit the bed circle into CANVAS px with a small margin
+        MARGIN = 10
+        px_per_mm = (CANVAS - MARGIN * 2) / BED_DIAMETER_MM
+
+        bed_px = BED_DIAMETER_MM * px_per_mm                  # should equal CANVAS - 2*MARGIN
+        svg_w_px = svg_w_mm * px_per_mm
+        svg_h_px = svg_h_mm * px_per_mm
+
+        # Centre of canvas
+        cx = CANVAS / 2.0
+        cy = CANVAS / 2.0
+
+        # SVG is centred on bed centre (build_center - svg_offset cancels out)
+        svg_left = cx - svg_w_px / 2.0
+        svg_top  = cy - svg_h_px / 2.0
+
+        canvas = QPixmap(CANVAS, CANVAS)
+        canvas.fill(QColor(240, 240, 240))   # light grey background
+
+        painter = QPainter(canvas)
+        painter.setRenderHint(QPainter.Antialiasing)
+
+        # --- Draw bed circle ---
+        bed_rect = QRectF(cx - bed_px / 2, cy - bed_px / 2, bed_px, bed_px)
+        painter.setBrush(QBrush(QColor(255, 255, 255)))        # white bed surface
+        painter.setPen(QPen(QColor(80, 80, 80), 2))
+        painter.drawEllipse(bed_rect)
+
+        # --- Draw SVG pattern scaled to bed coordinate space ---
+        if not svg_pixmap.isNull():
+            scaled_svg = svg_pixmap.scaled(
+                int(svg_w_px), int(svg_h_px),
+                QtCore.Qt.KeepAspectRatio,
+                QtCore.Qt.SmoothTransformation,
+            )
+            # Re-centre after KeepAspectRatio may have changed one dimension
+            actual_w = scaled_svg.width()
+            actual_h = scaled_svg.height()
+            draw_x = int(cx - actual_w / 2)
+            draw_y = int(cy - actual_h / 2)
+            painter.setOpacity(0.85)
+            painter.drawPixmap(draw_x, draw_y, scaled_svg)
+            painter.setOpacity(1.0)
+
+        # --- Draw SVG bounding box outline ---
+        painter.setBrush(Qt.NoBrush)
+        painter.setPen(QPen(QColor(0, 120, 220), 1, Qt.DashLine))
+        painter.drawRect(QRectF(svg_left, svg_top, svg_w_px, svg_h_px))
+
+        # --- Bed centre crosshair ---
+        painter.setPen(QPen(QColor(180, 0, 0), 1))
+        painter.drawLine(int(cx) - 6, int(cy), int(cx) + 6, int(cy))
+        painter.drawLine(int(cx), int(cy) - 6, int(cx), int(cy) + 6)
+
+        painter.end()
+        return canvas
 
     def RenderAlpha(self):
         """Renders alpha mask (used for troubleshooting)"""
