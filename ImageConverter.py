@@ -222,12 +222,12 @@ class ImageConverter():
                         if (temp_decode[0].lstrip() == 'width='): #get width data
                             #print("Getting width data")
                             temp_decode = temp_decode[2].partition('"')
-                            self.svg_width = float(temp_decode[0])
+                            self.svg_width = float(''.join(c for c in temp_decode[0] if c.isdigit() or c in '.+-e'))
                             #print(self.svg_width)
                         if (temp_decode[0].lstrip() == 'height='): #get height data
                             #print("Getting height data")
                             temp_decode = temp_decode[2].partition('"')
-                            self.svg_height = float(temp_decode[0])
+                            self.svg_height = float(''.join(c for c in temp_decode[0] if c.isdigit() or c in '.+-e'))
                             #print(self.svg_height)
                         #set to read next part
                         temp_decode = temp_decode[2]

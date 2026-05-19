@@ -22,6 +22,30 @@ Other useful components:
 
 ---
 
+## Changelog
+
+### v1.1.4 (2026-05-18)
+
+**Camera calibration** added to `CameraController` settings panel:
+- `calib_status_label` — green/red dot showing whether `calibration.npz` exists in the output dir
+- `btn_run_calibration` — triggers the full calibration flow: generate SVG target → capture image → detect circle via Hough → save `calibration.npz`
+- Calibration status auto-refreshes when a camera is selected from the combo box
+- No changes to the existing print logic
+
+**New package: `dice_evaluator/`** — standalone layer quality evaluation tool (not yet tested):
+
+| File | Purpose |
+|------|---------|
+| `constants.py` | Shared constants (bed size, build centre, GRBL home, calibration filename) |
+| `calibrate.py` | SVG generation, Hough circle detection, px↔mm mapping, save/load calibration |
+| `evaluator.py` | `DiceEvaluator` — remaps `image_array` to camera space, computes Dice coefficient per layer, saves overlay PNGs and CSV |
+| `main.py` | Standalone PyQt5 GUI (`python -m dice_evaluator.main`) |
+
+**Dependencies added:**
+- `pandas==0.25.3` (Python 3.6 compatible) — added to `requirements.txt` and installed in venv
+
+---
+
 ## Dependencies
 
 - Python 3.6+ (recommended 3.9+)
@@ -29,6 +53,7 @@ Other useful components:
 - numpy == 1.19.5
 - opencv-python == 4.5.5.64
 - pyserial == 3.5
+- pandas == 0.25.3
 
 Install dependencies:
 
