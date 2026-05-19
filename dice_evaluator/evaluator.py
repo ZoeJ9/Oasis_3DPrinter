@@ -9,7 +9,7 @@ import numpy as np
 import pandas as pd
 
 from .calibrate import load_calibration, mm_to_pixel
-from .constants import BED_DIAMETER_MM
+from .constants import BUILD_CENTER_X_MM, BUILD_CENTER_Y_MM
 
 
 class DiceEvaluator:
@@ -24,57 +24,91 @@ class DiceEvaluator:
         FileNotFoundError: If calibration.npz is not found next to the SVG.
     """
 
-    def __init__(self, svg_path: str, image_array: np.ndarray, captures_dir: str) -> None:
+    def __init__(
+        self,
+        svg_path: str,
+        image_array: np.ndarray,
+        captures_dir: str,
+        dpi: float,
+        svg_width_mm: float,
+        svg_height_mm: float,
+    ) -> None:
         self.svg_path = Path(svg_path)
         self.image_array = image_array  # shape: (height, width), binary 0/1
         self.captures_dir = Path(captures_dir)
+        self.dpi = dpi
+        self.svg_width_mm = svg_width_mm
+        self.svg_height_mm = svg_height_mm
 
-        calib = load_calibration(str(self.svg_path.parent))
+        calib = load_calibration(str(captures_dir))
         if calib is None:
             raise FileNotFoundError(
-                f"calibration.npz not found in {self.svg_path.parent}. "
+                f"calibration.npz not found in {captures_dir}. "
                 "Run calibration from the printer UI first."
             )
         self.calib = calib
 
-    def get_reference_mask(self, cam_h: int, cam_w: int) -> np.ndarray:
-        """Remap the SVG binary mask from mm space to camera pixel space.
+    def get_reference_mask(
+        self,
+        cam_h: int,
+        cam_w: int,
+        dpi: float,
+        svg_width_mm: float,
+        svg_height_mm: float,
+    ) -> np.ndarray:
+        """Remap the SVG binary mask from image_array pixel space to camera pixel space.
 
-        Each pixel (row, col) in image_array is treated as occupying:
-            x_mm = col * (BED_DIAMETER_MM / image_array.shape[1])
-            y_mm = row * (BED_DIAMETER_MM / image_array.shape[0])
+        Mirrors the PrintSVG coordinate transform exactly:
+            grbl_x_mm = row * (25.4 / dpi) + BUILD_CENTER_X_MM - svg_width_mm  / 2
+            grbl_y_mm = col * (25.4 / dpi) + BUILD_CENTER_Y_MM - svg_height_mm / 2
+        Then maps GRBL mm → camera px via calibration.
 
         Args:
-            cam_h: Camera image height in pixels.
-            cam_w: Camera image width in pixels.
+            cam_h:         Camera image height in pixels.
+            cam_w:         Camera image width in pixels.
+            dpi:           DPI used when image_array was rasterised.
+            svg_width_mm:  SVG width in mm  (imageconverter.svg_width).
+            svg_height_mm: SVG height in mm (imageconverter.svg_height).
 
         Returns:
             Binary mask of shape (cam_h, cam_w) with dtype uint8 (0 or 1).
         """
         arr_h, arr_w = self.image_array.shape
+        px_to_mm = 25.4 / dpi
+        svg_offset_x = svg_width_mm / 2
+        svg_offset_y = svg_height_mm / 2
         out = np.zeros((cam_h, cam_w), dtype=np.uint8)
 
         for row in range(arr_h):
             for col in range(arr_w):
                 if self.image_array[row, col] == 0:
                     continue
-                x_mm = col * (BED_DIAMETER_MM / arr_w)
-                y_mm = row * (BED_DIAMETER_MM / arr_h)
-                x_px, y_px = mm_to_pixel(x_mm, y_mm, self.calib)
+                grbl_x_mm = row * px_to_mm + BUILD_CENTER_X_MM - svg_offset_x
+                grbl_y_mm = col * px_to_mm + BUILD_CENTER_Y_MM - svg_offset_y
+                x_px, y_px = mm_to_pixel(grbl_x_mm, grbl_y_mm, self.calib)
                 if 0 <= x_px < cam_w and 0 <= y_px < cam_h:
                     out[y_px, x_px] = 1
 
-        # Dilate by 1 px to fill gaps from rounding
         kernel = np.ones((2, 2), dtype=np.uint8)
         out = cv2.dilate(out, kernel, iterations=1)
         return out
 
-    def evaluate_layer(self, layer_idx: int, captured_img: np.ndarray) -> dict:
+    def evaluate_layer(
+        self,
+        layer_idx: int,
+        captured_img: np.ndarray,
+        dpi: float,
+        svg_width_mm: float,
+        svg_height_mm: float,
+    ) -> dict:
         """Compute the Dice coefficient between a captured image and the reference mask.
 
         Args:
-            layer_idx:    Layer index (1-based) for reporting.
-            captured_img: RGB image of shape (h, w, ch) captured by CameraController.
+            layer_idx:     Layer index (1-based) for reporting.
+            captured_img:  RGB image of shape (h, w, ch) captured by CameraController.
+            dpi:           DPI used when image_array was rasterised.
+            svg_width_mm:  SVG width in mm  (imageconverter.svg_width).
+            svg_height_mm: SVG height in mm (imageconverter.svg_height).
 
         Returns:
             dict with keys:
@@ -84,7 +118,7 @@ class DiceEvaluator:
                                          shape (h, w, ch)
         """
         h, w, ch = captured_img.shape
-        ref_mask = self.get_reference_mask(h, w)
+        ref_mask = self.get_reference_mask(h, w, dpi, svg_width_mm, svg_height_mm)
 
         cap_gray = cv2.cvtColor(captured_img, cv2.COLOR_RGB2GRAY)
         _, cap_mask = cv2.threshold(cap_gray, 0, 1, cv2.THRESH_BINARY + cv2.THRESH_OTSU)
@@ -125,7 +159,9 @@ class DiceEvaluator:
                 continue
             img_rgb = cv2.cvtColor(bgr, cv2.COLOR_BGR2RGB)
 
-            result = self.evaluate_layer(layer_idx, img_rgb)
+            result = self.evaluate_layer(
+                layer_idx, img_rgb, self.dpi, self.svg_width_mm, self.svg_height_mm
+            )
 
             overlay_bgr = cv2.cvtColor(result["overlay"], cv2.COLOR_RGB2BGR)
             overlay_path = overlays_dir / f"layer_{layer_idx:03d}_overlay.png"
