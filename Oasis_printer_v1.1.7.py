@@ -994,54 +994,54 @@ class MainWindow(QtWidgets.QMainWindow):
 
     # v1.1.5 HOOK
     def save_reference_png(self, layer_idx):
-        """Remap image_array to camera resolution via calibration and save as PNG.
+        """Save image_array as PNG in bed-space coordinates.
 
-        Uses the same PrintSVG coordinate transform:
-            grbl_x_mm = row * (25.4/dpi) + build_center_x - svg_width_mm/2
-            grbl_y_mm = col * (25.4/dpi) + build_center_y - svg_height_mm/2
-        Then maps GRBL mm → camera px via calibration.npz.
-        Skipped silently if calibration.npz is not found.
+        Output image is the same pixel space as calibration_reference.png:
+            size  = (BED_DIAMETER_MM + 4mm margin) sq at current DPI
+            offset = 44mm  (bed centre maps to image centre)
+        Bed boundary circle drawn in black. No calibration.npz required.
         """
         import cv2
         import numpy as np
-        from dice_evaluator.calibrate import load_calibration, mm_to_pixel
+        from dice_evaluator.constants import BED_DIAMETER_MM, BED_RADIUS_MM
 
         captures_dir = self.camera_window.output_dir
-        calib = load_calibration(captures_dir)
-        if calib is None:
-            return
-
         arr = self.imageconverter.image_array
         arr_h, arr_w = arr.shape
+
         px_to_mm = 25.4 / self.printing_dpi
         svg_offset_x = self.imageconverter.svg_width / 2
         svg_offset_y = self.imageconverter.svg_height / 2
 
-        # Derive camera resolution from the most recent calibration capture
-        ref_img = cv2.imread(os.path.join(captures_dir, "calibration.png"))
-        if ref_img is None:
-            return
-        cam_h, cam_w = ref_img.shape[:2]
+        _margin_mm = 2.0
+        _bed_span_mm = BED_DIAMETER_MM + _margin_mm * 2      # 88mm
+        _px_per_mm = self.printing_dpi / 25.4
+        out_size = int(_bed_span_mm * _px_per_mm) + 1        # same as calib_array
+        _out_offset = _bed_span_mm / 2                       # 44mm — bed centre → image centre
 
-        out = np.zeros((cam_h, cam_w), dtype=np.uint8)
+        out = np.zeros((out_size, out_size), dtype=np.uint8)
         for row in range(arr_h):
             for col in range(arr_w):
                 if arr[row, col] == 0:
                     continue
+                # GRBL mm (same as PrintSVG)
                 grbl_x = row * px_to_mm + self.build_center_x - svg_offset_x
                 grbl_y = col * px_to_mm + self.build_center_y - svg_offset_y
-                x_px, y_px = mm_to_pixel(grbl_x, grbl_y, calib)
-                if 0 <= x_px < cam_w and 0 <= y_px < cam_h:
-                    out[y_px, x_px] = 255
+                # shift GRBL mm → bed-space px (bed centre = image centre)
+                out_row = int((grbl_x - self.build_center_x + _out_offset) * _px_per_mm)
+                out_col = int((grbl_y - self.build_center_y + _out_offset) * _px_per_mm)
+                if 0 <= out_row < out_size and 0 <= out_col < out_size:
+                    out[out_row, out_col] = 255
 
         kernel = np.ones((2, 2), dtype=np.uint8)
         out = cv2.dilate(out, kernel, iterations=1)
-        # invert: ink pixels black, background white (matches ArrayToImage convention)
-        out = 255 - out
+        out = 255 - out  # invert: ink=black, background=white
 
-        # Draw bed boundary circle (1 px black line) using stored calibration geometry
-        cx, cy, r = calib["circle_px"]
-        cv2.circle(out, (int(cx), int(cy)), int(r), color=0, thickness=1)
+        # bed boundary circle at image centre
+        _cx = out_size // 2
+        _cy = out_size // 2
+        _r = int(round(BED_RADIUS_MM * _px_per_mm))
+        cv2.circle(out, (_cx, _cy), _r, color=0, thickness=1)
 
         path = os.path.join(captures_dir, f"layer_{layer_idx:03d}_reference.png")
         cv2.imwrite(path, out)
@@ -1127,10 +1127,10 @@ class MainWindow(QtWidgets.QMainWindow):
             (_cy_px,          _cx_px         ),
         ]
 
-        # Cross geometry: 2 mm × 2 mm bounding box → arm = 1 mm from centre
-        #                 line thickness ≈ 0.5 mm
-        _arm_px   = int(round(1.0  * _px_per_mm))          # 1 mm  → 2 mm total span
-        _half_thk = max(1, int(round(0.25 * _px_per_mm)))  # 0.25 mm → 0.5 mm total
+        # Cross geometry: 5 mm × 5 mm bounding box → arm = 2.5 mm from centre
+        #                 line thickness 2 mm
+        _arm_px   = int(round(2.5 * _px_per_mm))           # 2.5 mm → 5 mm total span
+        _half_thk = max(1, int(round(1.0 * _px_per_mm)))   # 1 mm   → 2 mm total
 
         for (pr_f, pc_f) in _pts:
             pr, pc = int(round(pr_f)), int(round(pc_f))
