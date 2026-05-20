@@ -238,10 +238,11 @@ class GRBL(serial.Serial):
             #check if new layer is done
             if (self.nl_state == 0): #if new layer is in progress
                 if (self.motion_state == 'idle'): #if printer is not moving
-                    #if position is withing the bounds of the target
-                    if (self.motion_x_pos > self.nl_front_pos_x - self.nl_end_tolerance and self.motion_x_pos < self.nl_front_pos_x + self.nl_end_tolerance):
-                        self.nl_state = 1 #set new layer to 1 (done)
-                        print("new layer done")
+                    if (self.BufferLeft() == 0): #buffer must be fully drained before done
+                        #if position is withing the bounds of the target
+                        if (self.motion_x_pos > self.nl_front_pos_x - self.nl_end_tolerance and self.motion_x_pos < self.nl_front_pos_x + self.nl_end_tolerance):
+                            self.nl_state = 1 #set new layer to 1 (done)
+                            print("new layer done")
                 
         
     def SerialWriteRaw(self, input_string, temp_priority):
