@@ -1147,6 +1147,16 @@ class MainWindow(QtWidgets.QMainWindow):
                     if 0 <= r < _arr_h and 0 <= c < _arr_w:
                         calib_array[r][c] = 1
 
+        # 2b. Save calib_array as PNG in captures_dir (same pixel space as array)
+        import cv2 as _cv2
+        import numpy as _np
+        _out = ((1 - calib_array) * 255).astype(_np.uint8)
+        # draw bed boundary circle at array centre
+        _bed_r_px = int(round(BED_RADIUS_MM * _px_per_mm))
+        _cv2.circle(_out, (int(_cx_px), int(_cy_px)), _bed_r_px, color=0, thickness=1)
+        _cv2.imwrite(os.path.join(captures_dir, "calibration_reference.png"), _out)
+        print("CALIB: Saved calibration_reference.png")
+
         # 3. Set up print variables identical to _PrintSVG_inner
         self.build_center_x = 157.0
         self.build_center_y = 116.0
