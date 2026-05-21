@@ -1114,7 +1114,7 @@ class MainWindow(QtWidgets.QMainWindow):
         generate_calibration_svg(svg_path)
         print(f"CALIB: SVG written to {svg_path}")
 
-# 2. Build calibration image_array — 9-point cross-mark grid
+        # 2. Build calibration image_array — 9-point cross-mark grid
         #    (largest inscribed square in bed circle: corners + edge midpoints + center)
         import math
         from dice_evaluator.constants import (
