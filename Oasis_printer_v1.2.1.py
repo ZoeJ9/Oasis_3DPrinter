@@ -1041,8 +1041,8 @@ class MainWindow(QtWidgets.QMainWindow):
         _r = int(round(BED_RADIUS_MM * _px_per_mm))
         cv2.circle(out, (_cx, _cy), _r, color=0, thickness=1)
 
-        # mirror + 270° rotation (mirror+180° + 90° CW) to match camera view orientation
-        out = np.rot90(out, 3)
+        # mirror + 90° CCW rotation to match camera view orientation
+        out = np.rot90(out, 1)
 
         path = os.path.join(captures_dir, f"layer_{layer_idx:03d}_reference.png")
         cv2.imwrite(path, out)
@@ -1188,8 +1188,8 @@ class MainWindow(QtWidgets.QMainWindow):
         _out = ((1 - calib_array) * 255).astype(_np.uint8)
         _bed_r_px = int(round(BED_RADIUS_MM * _px_per_mm))
         _cv2.circle(_out, (int(_cx_px), int(_cy_px)), _bed_r_px, color=0, thickness=1)
-        # mirror + 270° rotation (mirror+180° + 90° CW) to match camera view orientation
-        _out = _np.rot90(_out, 3)
+        # mirror + 90° CCW rotation to match camera view orientation
+        _out = _np.rot90(_out, 1)
         _cv2.imwrite(os.path.join(captures_dir, "calibration_reference.png"), _out)
         print("CALIB: Saved calibration_reference.png")
 
