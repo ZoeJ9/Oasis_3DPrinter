@@ -1203,6 +1203,7 @@ class MainWindow(QtWidgets.QMainWindow):
         self.svg_offset_x = (BED_DIAMETER_MM + _calib_margin_mm * 2) / 2
 
         self.inkjet.SetDPI(self.printing_dpi)
+        self.inkjet.ClearBuffer()
 
         # Home and wait
         self.grbl.Home()
@@ -1219,6 +1220,13 @@ class MainWindow(QtWidgets.QMainWindow):
         while self.grbl.nl_state == 0:  # same polling pattern as main print loop
             time.sleep(0.1)
         print("CALIB: Powder layer spread done")
+
+        # Wait for GRBL to fully settle after spreading before starting inkjet sweeps
+        while self.grbl.motion_state != "idle":
+            time.sleep(0.1)
+        time.sleep(0.5)
+        self.InkjetSetPosition()
+        time.sleep(0.25)
 
         # 4. Print single layer — find X sweep bounds
         sweep_x_min = 0
