@@ -1046,6 +1046,35 @@ class MainWindow(QtWidgets.QMainWindow):
         path = os.path.join(captures_dir, f"layer_{layer_idx:03d}_reference.png")
         cv2.imwrite(path, out)
 
+    def save_reference_svg(self, layer_idx):
+        """Extract the current layer from the loaded SVG and save as a single-layer SVG."""
+        captures_dir = self.camera_window.output_dir
+        svg_path = self.imageconverter.file_path
+        layer_name = self.imageconverter.svg_layer_names[layer_idx]
+
+        in_layer = False
+        layer_lines = []
+        with open(svg_path, encoding="utf-8") as f:
+            header = None
+            for line in f:
+                if header is None and line.startswith("<svg "):
+                    header = line
+                if line.startswith("  <g ") and f'id="{layer_name}"' in line:
+                    in_layer = True
+                if in_layer:
+                    layer_lines.append(line)
+                if in_layer and line.startswith("  </g>"):
+                    break
+
+        if not header or not layer_lines:
+            return
+
+        out_path = os.path.join(captures_dir, f"layer_{layer_idx:03d}_reference.svg")
+        with open(out_path, "w", encoding="utf-8") as f:
+            f.write(header)
+            f.writelines(layer_lines)
+            f.write("</svg>\n")
+
     # CALIB HOOK — full calibration routine using existing hardware handles
     def _run_calibration(self):
         """Start calibration in a background thread (must not block the GUI thread)."""
@@ -1485,9 +1514,10 @@ class MainWindow(QtWidgets.QMainWindow):
                     time.sleep(0.1)
                     pass
 
-                # v1.1.5 HOOK — save image_array for current layer as reference PNG
+                # v1.1.5 HOOK — save image_array for current layer as reference PNG + SVG
                 if hasattr(self, "camera_window"):
                     self.save_reference_png(self.current_layer)
+                    self.save_reference_svg(self.current_layer)
 
                 # --- INSERTION 1: Photo After Recoating (Spread) ---
                 # The recoater has just finished spreading the new layer.
