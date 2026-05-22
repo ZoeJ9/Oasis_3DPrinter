@@ -24,6 +24,33 @@ Other useful components:
 
 ## Changelog
 
+### v1.3.1 (2026-05-22)
+
+**Camera capture quality overhaul** — validated settings for 175 mm bed setup:
+
+| Constant | Value | Note |
+|---|---|---|
+| `RESOLUTION_FULL` | 8000×6000 | 48 MP, MJPEG, ~1.3 fps |
+| `RESOLUTION_PREVIEW` | 1920×1080 | focusing / preview |
+| `AUTO_EXPOSURE_MANUAL` | 0.25 | DSHOW manual lock |
+| `EXPOSURE_VALUE` | −3 | 1/8 s (log₂) |
+| `GAIN_VALUE` | 0 | minimum |
+| `AUTO_WB` | 0 | white-balance locked |
+| `WARMUP_FRAMES` | 5 | discarded before capture |
+| `AVERAGING_FRAMES` | 10 | temporal noise reduction |
+| `UNSHARP_SIGMA` | 2.5 | unsharp mask radius |
+| `UNSHARP_AMOUNT` | 1.2 | sharpening strength (0 = off) |
+
+`capture_sync()` flow: MJPEG + full-res → exposure/gain lock → FPS=1 → discard warmup → average N frames → unsharp mask → save PNG.
+
+---
+
+### v1.2.2 (2026-05-22)
+
+Spread one powder layer + capture photo before the main print loop starts (`Layer_000_Spread`).
+
+---
+
 ### v1.1.4 (2026-05-18)
 
 **Camera calibration** added to `CameraController` settings panel:
