@@ -1,0 +1,9 @@
+__pycache__/
+*.pyc
+*.pyo
+timelapse_output/
+capture/
+runs/
+Serial_input_log.txt
+Serial_output_log.txt
+.claude/
