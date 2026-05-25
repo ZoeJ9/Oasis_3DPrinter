@@ -152,8 +152,9 @@ class ConfigRunner:
         mw.inkjet.Preheat(int(step["preheat"]))
         mw.inkjet.Prime(int(step["prime"]))
 
-        # Keep imageconverter DPI in sync
-        mw.imageconverter.SetDPI(int(step["dpi"]))
+        # Update print calculation variables only — do NOT call
+        # imageconverter.SetDPI() here because that resizes the pixel array
+        # and would corrupt image_size_x/y mid-print.
         mw.printing_dpi            = int(step["dpi"])
         mw.printing_sweep_size     = mw.printing_dpi // 2
         mw.pixel_to_pos_multiplier = 25.4 / mw.printing_dpi
