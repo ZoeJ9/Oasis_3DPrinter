@@ -1472,17 +1472,21 @@ class MainWindow(QtWidgets.QMainWindow):
     # ── Config-runner helpers ──────────────────────────────────────────────────
 
     def _config_capture_name(self, layer_idx: int, pre_or_post: str) -> str:
-        """Return capture filename stem for the current config step."""
+        """Return capture filename stem.
+        If a config run is active use the step-aware name; otherwise fall back
+        to the original Layer_NNN_Spread/Printed convention.
+        """
         runner = getattr(self, "_active_config_runner", None)
         if runner is None:
-            return f"s000_L{layer_idx:03d}_{pre_or_post}_default"
+            suffix = "Spread" if pre_or_post == "pre" else "Printed"
+            return f"Layer_{layer_idx:03d}_{suffix}"
         return runner.capture_filename(
             runner.current_step_id, layer_idx, pre_or_post, runner.current_note
         )
 
     def _config_log_capture(self, layer_idx: int, pre_or_post: str,
                              image_filename: str) -> None:
-        """Write a config_log.csv row if a config run is active."""
+        """Write a config_log.csv row — only when a config run is active."""
         runner = getattr(self, "_active_config_runner", None)
         if runner is None:
             return
@@ -1493,6 +1497,32 @@ class MainWindow(QtWidgets.QMainWindow):
         if step is not None:
             runner.log_capture(step, layer_idx, pre_or_post, image_filename)
 
+    def _init_print_state(self):
+        """Initialise all motion/print variables shared by both print paths.
+
+        Called by both _PrintSVG_inner and RunConfigPrint so that
+        _print_single_config_layer always finds the variables it needs.
+        """
+        self.build_center_x = 157.0
+        self.build_center_y = 116.0
+        self.print_speed    = 2200.0
+        self.travel_speed   = 3000.0
+        self.acceleration_distance  = 20.0
+        self.printing_dpi           = int(self.imageconverter.dpi)
+        self.printing_sweep_size    = int(self.printing_dpi / 2)
+        self.pixel_to_pos_multiplier = 25.4 / self.printing_dpi
+        self.image_size_x   = self.imageconverter.image_array_height
+        self.image_size_y   = self.imageconverter.image_array_width
+        self.layers         = self.imageconverter.svg_layers
+        self.svg_offset_y   = self.imageconverter.svg_height / 2
+        self.svg_offset_x   = self.imageconverter.svg_width  / 2
+        start_layer = max(1, min(self.form.start_layer_spinbox.value(), self.layers))
+        self.current_layer        = start_layer
+        self.current_layer_height = self.imageconverter.svg_layer_height[start_layer - 1]
+        self.printing_abort_flag  = 0
+        self.printing_pause_flag  = 0
+        return start_layer
+
     def RunConfigPrint(self):
         """Open a print_config.csv, build a ConfigRunner, and start the run in a thread."""
         if self.file_loaded != 2:
@@ -1501,8 +1531,13 @@ class MainWindow(QtWidgets.QMainWindow):
                 "Load an SVG file before starting a config print."
             )
             return
+        if self.printing_state != 0:
+            QtWidgets.QMessageBox.warning(
+                self.ui, "Already printing", "A print is already in progress."
+            )
+            return
         csv_path, _ = QFileDialog.getOpenFileName(
-            self, "Select config CSV", "", "CSV files (*.csv)"
+            self.ui, "Select config CSV", "", "CSV files (*.csv)"
         )
         if not csv_path:
             return
@@ -1512,7 +1547,7 @@ class MainWindow(QtWidgets.QMainWindow):
             QtWidgets.QMessageBox.critical(self.ui, "CSV Error", str(e))
             return
         self._active_config_runner = runner
-        self._printing_stop_event = threading.Event()
+        self._printing_stop_event  = threading.Event()
         self.printing_thread = threading.Thread(
             target=self._run_config_thread, args=(runner,), daemon=True
         )
@@ -1520,7 +1555,43 @@ class MainWindow(QtWidgets.QMainWindow):
 
     def _run_config_thread(self, runner: "ConfigRunner") -> None:
         try:
+            if (self.file_loaded != 2
+                    or self.inkjet_connection_state != 1
+                    or self.grbl_connection_state != 1):
+                self._print_error_signal.emit(
+                    "Config print requires SVG loaded + GRBL + inkjet connected."
+                )
+                return
+
+            self.printing_state = 2
+            self.inkjet.ClearBuffer()
+            self.grbl.Home()
+
+            # Initialise all shared print variables (fixes AttributeError on
+            # image_size_x/y, build_center, svg_offset, current_layer_height, etc.)
+            start_layer = self._init_print_state()
+            self.inkjet.SetDPI(self.printing_dpi)
+
+            # Wait for homing
+            while self.grbl.motion_state != "idle":
+                time.sleep(0.1)
+            time.sleep(0.25)
+            self.InkjetSetPosition()
+            time.sleep(0.25)
+
+            # Spread first layer only when starting from layer 1
+            if start_layer == 1:
+                print("--- Spreading initial powder layer ---")
+                self.grbl.NewLayer(self.imageconverter.svg_layer_height[0])
+                while self.grbl.nl_state == 0:
+                    time.sleep(0.1)
+                print("--- Initial spread done ---")
+            else:
+                # Powder already at correct height — skip spread, unblock nl_state
+                self.grbl.nl_state = 1
+
             runner.run()
+
         except Exception:
             import traceback
             msg = traceback.format_exc()
@@ -1534,12 +1605,14 @@ class MainWindow(QtWidgets.QMainWindow):
         """Print exactly one SVG layer using parameters already applied by ConfigRunner.
 
         layer_idx is the index within the step (0-based); current_layer is the
-        global SVG layer counter maintained by the runner loop.
+        global SVG layer counter advanced here after each layer.
         Camera captures are handled by ConfigRunner._capture, not here.
+        All required motion variables are guaranteed to exist because
+        _run_config_thread calls _init_print_state() before runner.run().
         """
-        svg_layer = getattr(self, "current_layer", 1)
+        svg_layer = self.current_layer
         self.imageconverter.SVGLayerToArray(svg_layer)
-        self._print_status_signal.emit(svg_layer, getattr(self, "layers", svg_layer))
+        self._print_status_signal.emit(svg_layer, self.layers)
         self.RenderOutput()
         print(f"[ConfigRunner] printing SVG layer {svg_layer} (step layer {layer_idx})")
 
@@ -1584,7 +1657,6 @@ class MainWindow(QtWidgets.QMainWindow):
                     sweep_x_pix * self.pixel_to_pos_multiplier
                     + self.build_center_x - self.svg_offset_x
                 )
-                # Y sweep bounds
                 sweep_y_min, sweep_y_max = 0, 0
                 flag = 0
                 for w in range(self.image_size_y):
@@ -1618,7 +1690,6 @@ class MainWindow(QtWidgets.QMainWindow):
                     + self.acceleration_distance
                 )
 
-                # Fill inkjet buffer
                 temp_arr = zeros(self.printing_sweep_size)
                 temp_hist = B64.B64ToArray(temp_arr)
                 temp_pos = (
@@ -1655,7 +1726,6 @@ class MainWindow(QtWidgets.QMainWindow):
                     "SBR " + B64.B64ToSingle(temp_pos) + " " + B64.B64ToArray(temp_arr)
                 )
 
-                # Motion: travel to start, then print sweep
                 self.grbl.SerialGotoXY(sweep_x_pos, sweep_y_start_pos, self.travel_speed)
                 self.grbl.StatusIndexSet()
                 while True:
@@ -1681,7 +1751,7 @@ class MainWindow(QtWidgets.QMainWindow):
 
                 sweep_x_pix -= self.printing_sweep_size
 
-        # Return gantry home after layer
+        # Return gantry home, then spread next powder layer
         self.grbl.SerialGotoHome(self.travel_speed)
         self.grbl.StatusIndexSet()
         while True:
@@ -1690,10 +1760,9 @@ class MainWindow(QtWidgets.QMainWindow):
                     and self.grbl.motion_state == "idle"):
                 break
 
-        # Advance SVG layer counter and spread the next powder layer
         self.current_layer += 1
-        if self.current_layer < getattr(self, "layers", self.current_layer):
-            next_h = self.imageconverter.svg_layer_height[self.current_layer]
+        if self.current_layer < self.layers:
+            next_h    = self.imageconverter.svg_layer_height[self.current_layer]
             thickness = next_h - self.current_layer_height
             self.current_layer_height = next_h
             self.grbl.NewLayer(thickness)
@@ -1735,72 +1804,17 @@ class MainWindow(QtWidgets.QMainWindow):
             and self.inkjet_connection_state == 1
             and self.grbl_connection_state == 1
         ):
-            self.printing_state = 2  # set printing state
-            self.inkjet.ClearBuffer()  # clear inkjet buffer on HP45
+            self.printing_state = 2
+            self.inkjet.ClearBuffer()
+            self.grbl.Home()
 
-            self.grbl.Home()  # home printer
-
-            # make variables
-
-            # going to fool around with these to find the offset. the originals will be maintained in the comments
-            # SHIFT THESE TO CENTER PRINT ON PRINTBED
-            self.build_center_x = (
-                157  # 147 #OG 157.0 #where the center of the build platform is
-            )
-
-            self.build_center_y = (
-                116  # 121.0 #OG 111 #where the center of the build platform is
-            )
-
-            self.print_speed = 2200  # 2200 #OG 2200.0 #how fast to print
-            self.travel_speed = 3000.0  # how fast to travel
-
-            self.acceleration_distance = 20.0  # how much to accelerate before printing
-            self.printing_dpi = int(self.imageconverter.dpi)  # the set DPI
-            self.printing_sweep_size = int(self.printing_dpi / 2)  # the sweep size
-            self.pixel_to_pos_multiplier = (
-                25.4 / self.printing_dpi
-            )  # 25.4 #the value from pixel to mm
-            # this setting shrinks the print by the uniform scaling factor
-
-            self.image_size_x = (
-                self.imageconverter.image_array_height
-            )  # the max size of image, in X-direction
-            self.image_size_y = (
-                self.imageconverter.image_array_width
-            )  # the max size of image, in Y-direction
-            self.layers = self.imageconverter.svg_layers  # how many layers there are
-            start_layer = max(1, min(self.form.start_layer_spinbox.value(), self.layers))
-            self.current_layer = start_layer
-            self.current_layer_height = self.imageconverter.svg_layer_height[start_layer - 1]
+            start_layer = self._init_print_state()
             print("Starting print at height: " + str(self.current_layer_height))
-
-            # set flags
-            self.printing_abort_flag = 0
-            self.printing_pause_flag = 0
-
-            # set inkjet settings
             self.inkjet.SetDPI(self.printing_dpi)
 
-            # set motion settings
-
-            # check file
-            # offsets given above are assumed to be the center of bed
-            # calculate offsets for centering file
-            # width is Y, height is X
-            # self.svg_offset_x = self.imageconverter.svg_height / 2
-            # self.svg_offset_y = self.imageconverter.svg_width / 2
-            # I flipped these because of a boo-boo somewhere.
-            self.svg_offset_y = self.imageconverter.svg_height / 2
-            self.svg_offset_x = self.imageconverter.svg_width / 2
-
             # Wait till homing is done
-            if (
-                self.grbl_connection_state == 1
-            ):  # conditional for testing, only wait for home if there is home to wait on
-                while self.grbl.motion_state != "idle":
-                    time.sleep(0.1)
-                    pass
+            while self.grbl.motion_state != "idle":
+                time.sleep(0.1)
 
             time.sleep(0.25)  # extra delay so the system can stabilize
             self.InkjetSetPosition()  # set position
