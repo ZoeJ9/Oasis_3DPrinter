@@ -1751,7 +1751,9 @@ class MainWindow(QtWidgets.QMainWindow):
 
                 sweep_x_pix -= self.printing_sweep_size
 
-        # Return gantry home, then spread next powder layer
+        # Return gantry home — post capture happens in ConfigRunner._capture()
+        # after this function returns, so NewLayer() must come after that.
+        # We store the next thickness here and let the caller trigger spreading.
         self.grbl.SerialGotoHome(self.travel_speed)
         self.grbl.StatusIndexSet()
         while True:
@@ -1763,9 +1765,10 @@ class MainWindow(QtWidgets.QMainWindow):
         self.current_layer += 1
         if self.current_layer < self.layers:
             next_h    = self.imageconverter.svg_layer_height[self.current_layer]
-            thickness = next_h - self.current_layer_height
-            self.current_layer_height = next_h
-            self.grbl.NewLayer(thickness)
+            self._pending_layer_thickness = next_h - self.current_layer_height
+            self.current_layer_height     = next_h
+        else:
+            self._pending_layer_thickness = None
 
     # ── End config-runner helpers ──────────────────────────────────────────────
 

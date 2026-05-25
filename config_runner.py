@@ -227,7 +227,8 @@ class ConfigRunner:
             for layer_idx in range(n_layers):
                 self._capture(step, layer_idx, "pre")
                 self._print_one_layer(step, layer_idx)
-                self._capture(step, layer_idx, "post")
+                self._capture(step, layer_idx, "post")   # before next spread
+                self._start_next_spread()
 
         print("[ConfigRunner] Config run complete.")
 
@@ -240,3 +241,12 @@ class ConfigRunner:
             )
             return
         self.mw._print_single_config_layer(step, layer_idx)
+
+    def _start_next_spread(self) -> None:
+        """Trigger NewLayer() after post capture — spreading starts here."""
+        if self.mw is None:
+            return
+        thickness = getattr(self.mw, "_pending_layer_thickness", None)
+        if thickness is not None:
+            self.mw.grbl.NewLayer(thickness)
+            self.mw._pending_layer_thickness = None
