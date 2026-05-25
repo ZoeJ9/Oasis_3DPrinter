@@ -146,18 +146,14 @@ class ConfigRunner:
         mw.config_layer_thickness = float(step["layer_thickness"])
         mw.config_overfeed        = float(step["overfeed"])
 
-        # Inkjet setters
+        # Inkjet hardware DPI only — do NOT touch imageconverter.SetDPI(),
+        # printing_dpi, printing_sweep_size, or pixel_to_pos_multiplier.
+        # Those are tied to the pixel array size set at print-start and must
+        # stay consistent; changing them mid-print shifts all coordinates.
         mw.inkjet.SetDPI(int(step["dpi"]))
         mw.inkjet.SetDensity(int(step["density"]))
         mw.inkjet.Preheat(int(step["preheat"]))
         mw.inkjet.Prime(int(step["prime"]))
-
-        # Update print calculation variables only — do NOT call
-        # imageconverter.SetDPI() here because that resizes the pixel array
-        # and would corrupt image_size_x/y mid-print.
-        mw.printing_dpi            = int(step["dpi"])
-        mw.printing_sweep_size     = mw.printing_dpi // 2
-        mw.pixel_to_pos_multiplier = 25.4 / mw.printing_dpi
 
         print(
             f"[ConfigRunner] step {step['step_id']} ({step['note']}): "
