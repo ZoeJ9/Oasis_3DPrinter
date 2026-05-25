@@ -1813,18 +1813,26 @@ class MainWindow(QtWidgets.QMainWindow):
 
             # add priming purge here, with motions to start the printhead
 
-            # Spread the first powder layer before printing begins
-            print("--- Spreading initial powder layer ---")
-            self.grbl.NewLayer(self.current_layer_height)
-            while self.grbl.nl_state == 0:
-                time.sleep(0.1)
-            print("--- Initial spread done, capturing photo ---")
-            if hasattr(self, "camera_window"):
-                self.save_reference_png(self.current_layer)
-                self.save_reference_svg(self.current_layer)
-                _fname = self._config_capture_name(0, "pre")
-                self.camera_window.capture_sync(_fname)
-                self._config_log_capture(0, "pre", _fname)
+            # Spread the first powder layer only when starting from layer 1.
+            # If resuming mid-print (start_layer > 1), powder is already at the
+            # correct height — skip spreading and start printing immediately.
+            if start_layer == 1:
+                print("--- Spreading initial powder layer ---")
+                self.grbl.NewLayer(self.imageconverter.svg_layer_height[0])
+                while self.grbl.nl_state == 0:
+                    time.sleep(0.1)
+                print("--- Initial spread done, capturing photo ---")
+                if hasattr(self, "camera_window"):
+                    self.save_reference_png(self.current_layer)
+                    self.save_reference_svg(self.current_layer)
+                    _fname = self._config_capture_name(0, "pre")
+                    self.camera_window.capture_sync(_fname)
+                    self._config_log_capture(0, "pre", _fname)
+
+            # When resuming mid-print, no NewLayer() was called above, so
+            # nl_state may still be 0 — force it to 1 to skip the initial wait.
+            if start_layer > 1:
+                self.grbl.nl_state = 1
 
             # start printing
             while True:
