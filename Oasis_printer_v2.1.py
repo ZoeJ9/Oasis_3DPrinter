@@ -450,11 +450,6 @@ class MainWindow(QtWidgets.QMainWindow):
         self.config_print_btn = QtWidgets.QPushButton("Config Print")
         self.config_print_btn.clicked.connect(self.RunConfigPrint)
         self.form.statusBar.addPermanentWidget(self.config_print_btn)
-
-        # Config-runner button — starts a CSV-driven parameter sweep
-        self.config_print_btn = QtWidgets.QPushButton("Config Print")
-        self.config_print_btn.clicked.connect(self.RunConfigPrint)
-        self.form.statusBar.addPermanentWidget(self.config_print_btn)
         # self.form.file_print_button.clicked.connect(self.RenderRGB)
         self.form.layer_slider.valueChanged.connect(self.UpdateLayer)
         self.form.start_layer_spinbox.setEnabled(False)  # disabled until file is loaded
