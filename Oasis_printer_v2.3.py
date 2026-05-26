@@ -716,11 +716,10 @@ class MainWindow(QtWidgets.QMainWindow):
         prime_pulses = getattr(self, "prime_pulses", 100)
         if sequence is None:
             sequence = [
-                ("preheat", 10),
-                ("prime",   10),
-                ("preheat", 10),
-                ("prime",    5),
-                ("preheat",  5),
+                ("preheat", 5),
+                ("prime",   5),
+                ("preheat", 5),
+                ("prime",   5),
             ]
         total = sum(n for _, n in sequence)
         done = 0

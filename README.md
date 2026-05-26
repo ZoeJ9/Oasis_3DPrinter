@@ -32,7 +32,7 @@ Other useful components:
   loop homes the gantry then runs a short clean: preheat ×3 + prime ×3, 1s between bursts
 - Gantry is moved to home before cleaning to prevent priming over the powder bed
 - `_HeadCleanWorker` now accepts an optional `sequence` parameter (default = full
-  10+10+10+5+5 manual sequence; backward-compatible with existing `InkjetHeadClean`)
+  5+5+5+5 manual sequence = 20 bursts; backward-compatible with existing `InkjetHeadClean`)
 - New `_MaybeCleanMidPrint()` method encapsulates the modulo check, homing, and clean call
 - SVG print path only (`_PrintSVG_inner`); `PrintArray` unchanged
 
