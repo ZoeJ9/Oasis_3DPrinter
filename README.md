@@ -24,6 +24,19 @@ Other useful components:
 
 ## Changelog
 
+### v2.4 (2026-05-26)
+
+**Mid-print cleaning: checkbox enable + UI snapshot**
+
+- Added "Clean mid-print" checkbox (default unchecked) and interval spinbox (1–50 layers)
+  to the Motion Control group in the main form — spinbox disabled when checkbox is off
+- `_PrintSVG_inner` snapshots both UI values into instance variables at print start,
+  so toggling the checkbox mid-print does not affect the current run
+- `_MaybeCleanMidPrint` now checks `mid_print_clean_enabled` flag first
+- `mid_print_clean_enabled = False` default — cleaning is opt-in
+
+---
+
 ### v2.3 (2026-05-26)
 
 **Mid-print printhead cleaning**
