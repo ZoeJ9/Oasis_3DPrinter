@@ -31,6 +31,7 @@ import os
 from ImageConverter import ImageConverter
 import B64
 from numpy import *
+import math
 import threading
 import time
 import serial
@@ -39,6 +40,29 @@ import serial
 # however, it is a bit of a lie. If python is busy in one thread, it will quietly ignore the others
 # sleep commands will give enough room that python works on other threads.
 # this is the reason why sending inkjet while moving is difficult. Will fix later, with another attempt
+
+import cv2 as _cv2_global
+from config_runner import ConfigRunner
+
+# CAMERA SETTINGS — validated for 175mm bed setup
+# ============================================================
+CAMERA_INDEX          = 0
+BACKEND               = _cv2_global.CAP_DSHOW
+
+RESOLUTION_FULL       = (8000, 6000)   # 48MP, ~1.3 fps, requires MJPEG
+RESOLUTION_PREVIEW    = (1920, 1080)   # fast preview / focusing, 30 fps
+
+AUTO_EXPOSURE_MANUAL  = 0.25           # Windows DSHOW: 0.25=manual, 0.75=auto
+EXPOSURE_VALUE        = -3             # log2(seconds). -3 = 1/8s
+GAIN_VALUE            = 0
+AUTO_WB               = 0             # 0 = manual lock
+
+WARMUP_FRAMES         = 5
+
+AVERAGING_FRAMES      = 10            # noise reduction (1 = off)
+UNSHARP_SIGMA         = 2.5
+UNSHARP_AMOUNT        = 1.2           # 0 = sharpening off
+# ============================================================
 
 
 # --- INSERTION: New Camera Controller Class ---
@@ -118,6 +142,16 @@ class CameraController(QtWidgets.QWidget):
         self.dir_layout.addWidget(self.dir_btn)
         form_layout.addRow("Output Dir:", self.dir_layout)
 
+        # CALIB HOOK — calibration status + run button
+        self.calib_status_label = QtWidgets.QLabel("● Unknown")
+        self.calib_status_label.setStyleSheet("color: grey;")
+        self.btn_run_calibration = QtWidgets.QPushButton("Run Calibration")
+        # CALIB HOOK — connected to MainWindow._run_calibration after instantiation
+        calib_row = QtWidgets.QHBoxLayout()
+        calib_row.addWidget(self.calib_status_label, 1)
+        calib_row.addWidget(self.btn_run_calibration)
+        form_layout.addRow("Calibration Status:", calib_row)
+
         controls_group.setLayout(form_layout)
         controls_group.setSizePolicy(QtWidgets.QSizePolicy.Expanding, QtWidgets.QSizePolicy.Preferred)
         layout.addWidget(controls_group)
@@ -154,6 +188,8 @@ class CameraController(QtWidgets.QWidget):
         data = self.port_combo.itemData(idx)
         if data is not None and data >= 0:
             self.camera_port = data
+        # CALIB HOOK — refresh calibration status whenever a camera is selected
+        self._update_calib_status()
 
     # --- Setters ---
     def set_enabled(self, val):
@@ -173,50 +209,95 @@ class CameraController(QtWidgets.QWidget):
             self.dir_edit.setText(d)
             self.output_dir = d
 
+    # CALIB HOOK — status helper only; hardware routine lives in MainWindow
+    def _update_calib_status(self):
+        """Check for calibration.npz in output_dir and update calib_status_label."""
+        import os
+        npz = os.path.join(self.output_dir, "calibration.npz")
+        if os.path.exists(npz):
+            self.calib_status_label.setText("● Calibrated")
+            self.calib_status_label.setStyleSheet("color: green; font-weight: bold;")
+        else:
+            self.calib_status_label.setText("● Not calibrated")
+            self.calib_status_label.setStyleSheet("color: red; font-weight: bold;")
+
     # --- Capture Logic (Called from Print Thread) ---
     def capture_sync(self, filename_suffix):
         """
-        Pauses, takes photo, saves it, and updates UI.
+        Full-resolution capture with UVC lock, frame averaging, and unsharp mask.
         Blocking call safe for use in the printing thread.
         """
         if not self.camera_enabled:
             return
 
+        import cv2
+        import numpy as np
+
         print(f"CAMERA: Initiating capture for {filename_suffix}")
 
-        # 1. Pre-capture settle time (half of pause time)
         time.sleep(self.pause_time / 2.0)
 
-        # 2. Capture Frame using OpenCV
         try:
-            import cv2
-
-            cap = cv2.VideoCapture(self.camera_port)
-            # Try to grab a frame
-            if cap.isOpened():
-                ret, frame = cap.read()
-                cap.release()  # Release immediately
-
-                if ret:
-                    # 3. Save to Disk
-                    filename = f"{filename_suffix}.png"
-                    filepath = os.path.join(self.output_dir, filename)
-                    cv2.imwrite(filepath, frame)
-                    print(f"CAMERA: Saved {filepath}")
-
-                    # 4. Emit signal to update UI (Must transfer data to main thread)
-                    # Convert BGR (OpenCV) to RGB (Qt)
-                    frame_rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
-                    self.update_image_signal.emit(frame_rgb)
-                else:
-                    print("CAMERA: Failed to read frame.")
-            else:
+            cap = cv2.VideoCapture(self.camera_port, BACKEND)
+            if not cap.isOpened():
                 print(f"CAMERA: Could not open port {self.camera_port}")
+                time.sleep(self.pause_time / 2.0)
+                return
+
+            # 1. MJPEG + maximum resolution
+            cap.set(cv2.CAP_PROP_FOURCC,       cv2.VideoWriter_fourcc(*"MJPG"))
+            cap.set(cv2.CAP_PROP_FRAME_WIDTH,  RESOLUTION_FULL[0])
+            cap.set(cv2.CAP_PROP_FRAME_HEIGHT, RESOLUTION_FULL[1])
+
+            # 2. Manual lock: exposure and gain
+            cap.set(cv2.CAP_PROP_AUTO_EXPOSURE, AUTO_EXPOSURE_MANUAL)
+            cap.set(cv2.CAP_PROP_EXPOSURE,      EXPOSURE_VALUE)
+            cap.set(cv2.CAP_PROP_GAIN,          GAIN_VALUE)
+            cap.set(cv2.CAP_PROP_AUTO_WB,       AUTO_WB)
+
+            # 3. Lock FPS to 1 (preserve USB 2.0 bandwidth)
+            cap.set(cv2.CAP_PROP_FPS, 1)
+
+            # 4. Discard warm-up frames
+            for _ in range(WARMUP_FRAMES):
+                cap.read()
+
+            # 5. Frame averaging
+            frames = []
+            for _ in range(max(1, AVERAGING_FRAMES)):
+                ret, f = cap.read()
+                if ret:
+                    frames.append(f.astype(np.float32))
+            cap.release()
+
+            if not frames:
+                print("CAMERA: Failed to read frames.")
+                time.sleep(self.pause_time / 2.0)
+                return
+
+            frame = np.mean(frames, axis=0).astype(np.uint8)
+
+            # 6. Unsharp mask
+            if UNSHARP_AMOUNT > 0:
+                blurred = cv2.GaussianBlur(frame, (0, 0), UNSHARP_SIGMA)
+                frame = cv2.addWeighted(frame, 1 + UNSHARP_AMOUNT,
+                                        blurred, -UNSHARP_AMOUNT, 0)
+
+            # 7. Save (PNG)
+            actual_w = int(frames[0].shape[1]) if frames else 0
+            actual_h = int(frames[0].shape[0]) if frames else 0
+            filename = f"{filename_suffix}.png"
+            filepath = os.path.join(self.output_dir, filename)
+            cv2.imwrite(filepath, frame)
+            print(f"CAMERA: Saved {filepath}  ({actual_w}x{actual_h}, avg={len(frames)})")
+
+            # 8. Update UI
+            frame_rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
+            self.update_image_signal.emit(frame_rgb)
 
         except Exception as e:
             print(f"CAMERA ERROR: {e}")
 
-        # 5. Post-capture wait (remainder of pause time)
         time.sleep(self.pause_time / 2.0)
 
     # --- UI Update (Runs on Main Thread) ---
@@ -258,6 +339,9 @@ class MainWindow(QtWidgets.QMainWindow):
         self.ui.show()
 
         self.camera_window = CameraController()
+
+        # CALIB HOOK — wire calibration button to MainWindow so it can access grbl/hp45/imageconverter
+        self.camera_window.btn_run_calibration.clicked.connect(self._run_calibration)
 
         # Add a button to the status bar (or elsewhere) to open the camera settings
         self.camera_btn = QtWidgets.QPushButton("Camera Settings")
@@ -361,6 +445,11 @@ class MainWindow(QtWidgets.QMainWindow):
         self.form.file_print_button.clicked.connect(self.RunPrintArray)
         self.form.pause_button.clicked.connect(self.PausePrint)
         self.form.abort_button.clicked.connect(self.AbortPrint)
+
+        # Config-runner: CSV-driven parameter sweep
+        self.config_print_btn = QtWidgets.QPushButton("Config Print")
+        self.config_print_btn.clicked.connect(self.RunConfigPrint)
+        self.form.statusBar.addPermanentWidget(self.config_print_btn)
         # self.form.file_print_button.clicked.connect(self.RenderRGB)
         self.form.layer_slider.valueChanged.connect(self.UpdateLayer)
         self.form.start_layer_spinbox.setEnabled(False)  # disabled until file is loaded
@@ -383,6 +472,9 @@ class MainWindow(QtWidgets.QMainWindow):
         self._grbl_status_signal.connect(self._update_grbl_status)
 
         self.form.statusBar.addPermanentWidget(QLabel(" "), 5)
+
+        self.bed_size_label = QLabel("No file loaded")
+        self.form.statusBar.addPermanentWidget(self.bed_size_label, 6)
 
         self.form.statusBar.addPermanentWidget(self.inkjet_label, 1)
         self.form.statusBar.addPermanentWidget(self.inkjet_y_pos, 1)
@@ -749,6 +841,41 @@ class MainWindow(QtWidgets.QMainWindow):
             self.form.start_layer_spinbox.setValue(1)
             self.form.start_layer_spinbox.setEnabled(True)
             self.RenderOutput()
+            self._UpdateBedSizeStatus()
+            self._CheckMaxHeight()
+
+    def _UpdateBedSizeStatus(self):
+        """Show print dimensions vs 84mm circular bed in the status bar."""
+        BED_DIAMETER_MM = 84.0
+        w = self.imageconverter.svg_width   # mm
+        h = self.imageconverter.svg_height  # mm
+        layers = self.imageconverter.svg_layers
+
+        # Diagonal of the bounding box — worst case for a circular bed
+        diagonal = math.sqrt(w ** 2 + h ** 2)
+        fits = diagonal <= BED_DIAMETER_MM
+        fit_str = "✓ FITS" if fits else f"⚠ EXCEEDS BED (diagonal {diagonal:.1f} mm)"
+        status = (
+            f"Print: {w:.1f} x {h:.1f} mm  |  "
+            f"Layers: {layers}  |  "
+            f"Bed: {BED_DIAMETER_MM:.0f} mm dia  |  "
+            f"{fit_str}"
+        )
+        self.bed_size_label.setText(status)
+
+    def _CheckMaxHeight(self):
+        """Warn if total structure height exceeds 21mm (210 layers × 0.1mm)."""
+        MAX_HEIGHT_MM = 21.0  # 210 layers × 0.1mm
+        if not self.imageconverter.svg_layer_height:
+            return
+        total_height = self.imageconverter.svg_layer_height[-1]  # mm
+        if total_height > MAX_HEIGHT_MM:
+            QMessageBox.warning(
+                self,
+                "Height Warning",
+                f"Structure height {total_height:.2f} mm exceeds maximum {MAX_HEIGHT_MM:.1f} mm "
+                f"(210 layers × 0.1 mm).\n\nPrint may fail or damage the printer.",
+            )
 
     def UpdateLayer(self):
         if (
@@ -812,14 +939,82 @@ class MainWindow(QtWidgets.QMainWindow):
         if self.file_loaded == 2:
             self.imageconverter.ArrayToImage()
             self.output_image_display = self.imageconverter.output_image
-            if (
-                self.output_image_display.width() > 300
-                and self.output_image_display.height() > 300
-            ):
-                self.output_image_display = self.output_image_display.scaled(
-                    300, 300, QtCore.Qt.KeepAspectRatio
-                )
-            self.form.output_window.setPixmap(self.output_image_display)
+            overlay = self._RenderBedOverlay(self.output_image_display)
+            self.form.output_window.setPixmap(overlay)
+
+    def _RenderBedOverlay(self, svg_pixmap):
+        """Composite the SVG pattern onto a circular bed preview.
+
+        The bed (84 mm dia) is drawn as a light-grey filled circle.
+        The SVG bounding box is centered on the bed (matching build_center/svg_offset logic).
+        The SVG pattern image is painted inside that bounding box.
+        Returns a 300x300 QPixmap.
+        """
+        from PyQt5.QtGui import QPainter, QColor, QPen, QBrush
+        from PyQt5.QtCore import Qt, QRectF
+
+        CANVAS = 300
+        BED_DIAMETER_MM = 84.0
+
+        svg_w_mm = self.imageconverter.svg_width   # mm
+        svg_h_mm = self.imageconverter.svg_height  # mm
+
+        # Scale factor: fit the bed circle into CANVAS px with a small margin
+        MARGIN = 10
+        px_per_mm = (CANVAS - MARGIN * 2) / BED_DIAMETER_MM
+
+        bed_px = BED_DIAMETER_MM * px_per_mm                  # should equal CANVAS - 2*MARGIN
+        svg_w_px = svg_w_mm * px_per_mm
+        svg_h_px = svg_h_mm * px_per_mm
+
+        # Centre of canvas
+        cx = CANVAS / 2.0
+        cy = CANVAS / 2.0
+
+        # SVG is centred on bed centre (build_center - svg_offset cancels out)
+        svg_left = cx - svg_w_px / 2.0
+        svg_top  = cy - svg_h_px / 2.0
+
+        canvas = QPixmap(CANVAS, CANVAS)
+        canvas.fill(QColor(240, 240, 240))   # light grey background
+
+        painter = QPainter(canvas)
+        painter.setRenderHint(QPainter.Antialiasing)
+
+        # --- Draw bed circle ---
+        bed_rect = QRectF(cx - bed_px / 2, cy - bed_px / 2, bed_px, bed_px)
+        painter.setBrush(QBrush(QColor(255, 255, 255)))        # white bed surface
+        painter.setPen(QPen(QColor(80, 80, 80), 2))
+        painter.drawEllipse(bed_rect)
+
+        # --- Draw SVG pattern scaled to bed coordinate space ---
+        if not svg_pixmap.isNull():
+            scaled_svg = svg_pixmap.scaled(
+                int(svg_w_px), int(svg_h_px),
+                QtCore.Qt.KeepAspectRatio,
+                QtCore.Qt.SmoothTransformation,
+            )
+            # Re-centre after KeepAspectRatio may have changed one dimension
+            actual_w = scaled_svg.width()
+            actual_h = scaled_svg.height()
+            draw_x = int(cx - actual_w / 2)
+            draw_y = int(cy - actual_h / 2)
+            painter.setOpacity(0.85)
+            painter.drawPixmap(draw_x, draw_y, scaled_svg)
+            painter.setOpacity(1.0)
+
+        # --- Draw SVG bounding box outline ---
+        painter.setBrush(Qt.NoBrush)
+        painter.setPen(QPen(QColor(0, 120, 220), 1, Qt.DashLine))
+        painter.drawRect(QRectF(svg_left, svg_top, svg_w_px, svg_h_px))
+
+        # --- Bed centre crosshair ---
+        painter.setPen(QPen(QColor(180, 0, 0), 1))
+        painter.drawLine(int(cx) - 6, int(cy), int(cx) + 6, int(cy))
+        painter.drawLine(int(cx), int(cy) - 6, int(cx), int(cy) + 6)
+
+        painter.end()
+        return canvas
 
     def RenderAlpha(self):
         """Renders alpha mask (used for troubleshooting)"""
@@ -858,6 +1053,725 @@ class MainWindow(QtWidgets.QMainWindow):
             self.printing_thread = threading.Thread(target=self.PrintSVG, daemon=True)
             self.printing_thread.start()
 
+    # v1.1.5 HOOK
+    def save_reference_png(self, layer_idx):
+        """Save image_array as PNG in bed-space coordinates.
+
+        Output image is the same pixel space as calibration_reference.png:
+            size  = (BED_DIAMETER_MM + 4mm margin) sq at current DPI
+            offset = 44mm  (bed centre maps to image centre)
+        Bed boundary circle drawn in black. No calibration.npz required.
+        """
+        import cv2
+        import numpy as np
+        from dice_evaluator.constants import BED_DIAMETER_MM, BED_RADIUS_MM
+
+        captures_dir = self.camera_window.output_dir
+        arr = self.imageconverter.image_array
+        arr_h, arr_w = arr.shape
+
+        # bed-space output: same coordinate system as calibration_reference.png
+        # Both arrays use same DPI, so pixel mapping is a simple centre-to-centre shift.
+        # svg_offset (GRBL world origin) cancels out — only bed-relative position matters.
+        _margin_mm = 2.0
+        _bed_span_mm = BED_DIAMETER_MM + _margin_mm * 2      # 88mm
+        _px_per_mm = self.printing_dpi / 25.4
+        out_size = int(_bed_span_mm * _px_per_mm) + 1        # same as calib_array
+        _out_cx = out_size // 2   # output image centre col (= bed centre Y)
+        _out_cy = out_size // 2   # output image centre row (= bed centre X)
+        _arr_cx = arr_w // 2      # image_array centre col
+        _arr_cy = arr_h // 2      # image_array centre row
+
+        out = np.zeros((out_size, out_size), dtype=np.uint8)
+        for row in range(arr_h):
+            for col in range(arr_w):
+                if arr[row, col] == 0:
+                    continue
+                out_row = row - _arr_cy + _out_cy
+                out_col = col - _arr_cx + _out_cx
+                if 0 <= out_row < out_size and 0 <= out_col < out_size:
+                    out[out_row, out_col] = 255
+
+        kernel = np.ones((2, 2), dtype=np.uint8)
+        out = cv2.dilate(out, kernel, iterations=1)
+        out = 255 - out  # invert: ink=black, background=white
+
+        # bed boundary circle at image centre
+        _cx = out_size // 2
+        _cy = out_size // 2
+        _r = int(round(BED_RADIUS_MM * _px_per_mm))
+        cv2.circle(out, (_cx, _cy), _r, color=0, thickness=1)
+
+        # mirror + 90° CCW rotation to match camera view orientation
+        out = np.rot90(out, 1)
+
+        path = os.path.join(captures_dir, f"layer_{layer_idx:03d}_reference.png")
+        cv2.imwrite(path, out)
+
+    def save_reference_svg(self, layer_idx):
+        """Extract the current layer from the loaded SVG and save as a single-layer SVG."""
+        captures_dir = self.camera_window.output_dir
+        svg_path = self.imageconverter.file_path
+        layer_name = self.imageconverter.svg_layer_names[layer_idx]
+
+        in_layer = False
+        layer_lines = []
+        with open(svg_path, encoding="utf-8") as f:
+            header = None
+            for line in f:
+                if header is None and line.startswith("<svg "):
+                    header = line
+                if line.startswith("  <g ") and f'id="{layer_name}"' in line:
+                    in_layer = True
+                if in_layer:
+                    layer_lines.append(line)
+                if in_layer and line.startswith("  </g>"):
+                    break
+
+        if not header or not layer_lines:
+            return
+
+        out_path = os.path.join(captures_dir, f"layer_{layer_idx:03d}_reference.svg")
+        with open(out_path, "w", encoding="utf-8") as f:
+            f.write(header)
+            f.writelines(layer_lines)
+            f.write("</svg>\n")
+
+    # CALIB HOOK — full calibration routine using existing hardware handles
+    def _run_calibration(self):
+        """Start calibration in a background thread (must not block the GUI thread)."""
+        if self.grbl_connection_state != 1 or self.inkjet_connection_state != 1:
+            QtWidgets.QMessageBox.warning(
+                self.ui,
+                "Not Ready",
+                "Connect both GRBL and HP45 before running calibration.",
+            )
+            return
+        t = threading.Thread(target=self._run_calibration_inner, daemon=True)
+        t.start()
+
+    def _run_calibration_inner(self):
+        """Hardware calibration routine — runs in a background thread.
+
+        Flow:
+          1. Write asymmetric circle-grid SVG (4×11, 84mm bed) to captures_dir
+          2. Parse SVG circles → build calib_array in bed-space pixel coords
+          3. Print 1 layer via existing self.grbl + self.hp45 path
+          4. Poll self.grbl.nl_state == 1   (same pattern as main loop)
+          5. capture_sync("calibration") → frame on disk
+          6. detect_circle_in_image(frame) → compute + save calibration.npz
+        """
+        import cv2
+        from dice_evaluator.calibrate import (
+            detect_circle_in_image,
+            compute_calibration,
+            save_calibration,
+        )
+        from dice_evaluator.constants import (
+            BED_DIAMETER_MM, BED_RADIUS_MM, BUILD_CENTER_X_MM, BUILD_CENTER_Y_MM,
+        )
+
+        captures_dir = self.camera_window.output_dir
+
+        # 1. Write the asymmetric circle-grid calibration SVG to disk
+        # Grid: 4×11 rows (alternating offset), circle r=1.8mm, 12mm column pitch,
+        #       6mm row pitch, canvas 61.6×79.6mm centred on bed
+        _SVG_W_MM  = 61.6
+        _SVG_H_MM  = 79.6
+        _CIRCLE_R  = 1.8   # mm
+        _COL_PITCH = 12.0  # mm between columns within a row
+        _ROW_PITCH = 6.0   # mm between rows
+        _ROW_EVEN_X0 = 9.8   # cx of first circle on even rows (0-indexed)
+        _ROW_ODD_X0  = 15.8  # cx of first circle on odd rows
+        _N_COLS = 4
+        _N_ROWS = 11
+        _ROW_Y0 = 9.8   # cy of first row
+
+        svg_circles = []
+        for row in range(_N_ROWS):
+            cx0 = _ROW_EVEN_X0 if row % 2 == 0 else _ROW_ODD_X0
+            cy  = _ROW_Y0 + row * _ROW_PITCH
+            for col in range(_N_COLS):
+                cx = cx0 + col * _COL_PITCH
+                svg_circles.append((cx, cy))
+
+        svg_lines = [
+            '<?xml version="1.0" encoding="UTF-8" standalone="no"?>',
+            f'<svg xmlns="http://www.w3.org/2000/svg"',
+            f'    width="{_SVG_W_MM}mm" height="{_SVG_H_MM}mm"',
+            f'    viewBox="0 0 {_SVG_W_MM} {_SVG_H_MM}">',
+            f'  <rect x="0" y="0" width="{_SVG_W_MM}" height="{_SVG_H_MM}" fill="white" />',
+            f'  <rect x="0" y="0" width="{_SVG_W_MM}" height="{_SVG_H_MM}" fill="none" stroke="black" stroke-width="0.200" />',
+        ]
+        for (cx, cy) in svg_circles:
+            svg_lines.append(f'  <circle cx="{cx}" cy="{cy}" r="{_CIRCLE_R}" fill="black" />')
+        svg_lines.append('</svg>')
+
+        svg_path = os.path.join(captures_dir, "calibration_target.svg")
+        with open(svg_path, "w", encoding="utf-8") as _f:
+            _f.write("\n".join(svg_lines) + "\n")
+        print(f"CALIB: SVG written to {svg_path}")
+
+        # 2. Build calib_array in bed-space pixel coords
+        #    SVG is centred on bed centre; each circle is filled as a solid disc.
+        _calib_dpi   = int(self.imageconverter.dpi)
+        _px_per_mm   = _calib_dpi / 25.4
+
+        _calib_margin_mm = 2.0
+        _arr_w = int((BED_DIAMETER_MM + _calib_margin_mm * 2) * _px_per_mm) + 1
+        _arr_h = int((BED_DIAMETER_MM + _calib_margin_mm * 2) * _px_per_mm) + 1
+
+        # Array centre = bed centre in pixel space
+        _cx_px = _arr_w / 2.0   # col axis → machine Y
+        _cy_px = _arr_h / 2.0   # row axis → machine X
+
+        # SVG origin offset: SVG (0,0) maps to bed_centre - svg_half_size
+        _svg_origin_col = _cx_px - (_SVG_W_MM / 2.0) * _px_per_mm  # col offset
+        _svg_origin_row = _cy_px - (_SVG_H_MM / 2.0) * _px_per_mm  # row offset
+
+        _r_px = int(round(_CIRCLE_R * _px_per_mm))
+
+        import cv2 as _cv2
+        import numpy as _np
+        _calib_u8 = zeros((_arr_h, _arr_w), dtype=_np.uint8)
+
+        for (svg_cx_mm, svg_cy_mm) in svg_circles:
+            # SVG cx is along canvas width (→ machine Y → col axis)
+            # SVG cy is along canvas height (→ machine X → row axis)
+            col_c = int(round(_svg_origin_col + svg_cx_mm * _px_per_mm))
+            row_c = int(round(_svg_origin_row + svg_cy_mm * _px_per_mm))
+            _cv2.circle(_calib_u8, (col_c, row_c), _r_px, color=255, thickness=-1)
+
+        # Transfer u8 mask into float calib_array (1 = ink)
+        calib_array = (_calib_u8 > 0).astype(float)
+
+        # 2b. Save reference PNG (ink=black, background=white) with bed boundary
+        _out = ((1 - calib_array) * 255).astype(_np.uint8)
+        _bed_r_px = int(round(BED_RADIUS_MM * _px_per_mm))
+        _cv2.circle(_out, (int(_cx_px), int(_cy_px)), _bed_r_px, color=0, thickness=1)
+        # mirror + 90° CCW rotation to match camera view orientation
+        _out = _np.rot90(_out, 1)
+        _cv2.imwrite(os.path.join(captures_dir, "calibration_reference.png"), _out)
+        print("CALIB: Saved calibration_reference.png")
+
+        # 3. Set up print variables identical to _PrintSVG_inner
+        self.build_center_x = 157.0
+        self.build_center_y = 116.0
+        self.print_speed = 2200.0
+        self.travel_speed = 3000.0
+        self.acceleration_distance = 20.0
+        self.printing_dpi = _calib_dpi
+        self.printing_sweep_size = int(self.printing_dpi / 2)
+        self.pixel_to_pos_multiplier = 25.4 / self.printing_dpi
+        self.image_size_x = _arr_h
+        self.image_size_y = _arr_w
+        self.svg_offset_y = (BED_DIAMETER_MM + _calib_margin_mm * 2) / 2
+        self.svg_offset_x = (BED_DIAMETER_MM + _calib_margin_mm * 2) / 2
+
+        self.inkjet.SetDPI(self.printing_dpi)
+        self.inkjet.ClearBuffer()
+
+        # Home and wait
+        self.grbl.Home()
+        while self.grbl.motion_state != "idle":
+            time.sleep(0.1)
+        time.sleep(0.25)
+        self.InkjetSetPosition()
+        time.sleep(0.25)
+
+        # CALIB HOOK — spread one powder layer before printing
+        calib_layer_thickness = float(self.form.motion_layer_thickness.value()) * 0.05
+        print(f"CALIB: Spreading powder layer (thickness={calib_layer_thickness:.2f} mm)")
+        self.grbl.NewLayer(calib_layer_thickness)
+        while self.grbl.nl_state == 0:  # same polling pattern as main print loop
+            time.sleep(0.1)
+        print("CALIB: Powder layer spread done")
+
+        # Wait for GRBL to fully settle after spreading before starting inkjet sweeps
+        while self.grbl.motion_state != "idle":
+            time.sleep(0.1)
+        time.sleep(0.5)
+        self.InkjetSetPosition()
+        time.sleep(0.25)
+
+        # 4. Print single layer — find X sweep bounds
+        sweep_x_min = 0
+        sweep_x_max = 0
+        temp_break_loop = 0
+        for h in range(self.image_size_x):
+            for w in range(self.image_size_y):
+                if calib_array[h][w] != 0:
+                    sweep_x_min = h
+                    temp_break_loop = 1
+                    break
+            if temp_break_loop:
+                break
+        temp_break_loop = 0
+        for h in reversed(range(self.image_size_x)):
+            for w in range(self.image_size_y):
+                if calib_array[h][w] != 0:
+                    sweep_x_max = h
+                    temp_break_loop = 1
+                    break
+            if temp_break_loop:
+                break
+
+        sweep_x_size = sweep_x_max - sweep_x_min
+        sweeps = int(sweep_x_size / self.printing_sweep_size)
+        if sweep_x_size % self.printing_sweep_size != 0:
+            sweeps += 1
+
+        sweep_x_pix = sweep_x_max - self.printing_sweep_size
+        for _ in range(sweeps):
+            sweep_x_pos = (
+                sweep_x_pix * self.pixel_to_pos_multiplier
+                + self.build_center_x
+                - self.svg_offset_x
+            )
+            # Y sweep bounds
+            sweep_y_min = 0
+            temp_break_loop = 0
+            for w in range(self.image_size_y):
+                for h in range(int(sweep_x_pix), int(sweep_x_pix + self.printing_sweep_size)):
+                    if h > 0 and calib_array[h][w] != 0:
+                        sweep_y_min = w
+                        temp_break_loop = 1
+                        break
+                if temp_break_loop:
+                    break
+            sweep_y_max = 0
+            temp_break_loop = 0
+            for w in reversed(range(self.image_size_y)):
+                for h in range(int(sweep_x_pix), int(sweep_x_pix + self.printing_sweep_size)):
+                    if h > 0 and calib_array[h][w] != 0:
+                        sweep_y_max = w
+                        temp_break_loop = 1
+                        break
+                if temp_break_loop:
+                    break
+
+            sweep_y_start_pos = (
+                sweep_y_min * self.pixel_to_pos_multiplier
+                + self.build_center_y
+                - self.svg_offset_y
+                - self.acceleration_distance
+            )
+            sweep_y_end_pos = (
+                sweep_y_max * self.pixel_to_pos_multiplier
+                + self.build_center_y
+                - self.svg_offset_y
+                + self.acceleration_distance
+            )
+
+            # Fill inkjet buffer
+            temp_line_array = zeros(self.printing_sweep_size)
+            temp_line_history = B64.B64ToArray(temp_line_array)
+            temp_line_string = temp_line_history
+            temp_pos = (
+                (sweep_y_min - 1) * self.pixel_to_pos_multiplier
+                + self.build_center_y
+                - self.svg_offset_y
+            ) * 1000
+            self.inkjet.SerialWriteBufferRaw(
+                "SBR " + B64.B64ToSingle(temp_pos) + " " + temp_line_string
+            )
+            for w in range(sweep_y_min, sweep_y_max):
+                temp_counter = 0
+                for h in range(int(sweep_x_pix), int(sweep_x_pix + self.printing_sweep_size)):
+                    temp_line_array[temp_counter] = (
+                        calib_array[h][w] if h >= 0 else 0
+                    )
+                    temp_counter += 1
+                new_str = B64.B64ToArray(temp_line_array)
+                if new_str != temp_line_history:
+                    temp_line_history = new_str
+                    temp_pos = (
+                        w * self.pixel_to_pos_multiplier
+                        + self.build_center_y
+                        - self.svg_offset_y
+                    ) * 1000
+                    self.inkjet.SerialWriteBufferRaw(
+                        "SBR " + B64.B64ToSingle(temp_pos) + " " + new_str
+                    )
+            temp_line_array = zeros(self.printing_sweep_size)
+            temp_line_string = B64.B64ToArray(temp_line_array)
+            temp_pos = (
+                (sweep_y_max + 1) * self.pixel_to_pos_multiplier
+                + self.build_center_y
+                - self.svg_offset_y
+            ) * 1000
+            self.inkjet.SerialWriteBufferRaw(
+                "SBR " + B64.B64ToSingle(temp_pos) + " " + temp_line_string
+            )
+
+            # Move to start, wait, print sweep
+            self.grbl.SerialGotoXY(sweep_x_pos, sweep_y_start_pos, self.travel_speed)
+            self.grbl.StatusIndexSet()
+            while True:
+                time.sleep(0.1)
+                if self.grbl.StatusIndexChanged() == 1 and self.grbl.motion_state == "idle":
+                    break
+            while self.inkjet.BufferLeft() > 0:
+                time.sleep(0.1)
+            time.sleep(0.2)
+            self.InkjetSetPosition()
+            time.sleep(0.2)
+            self.grbl.SerialGotoXY(sweep_x_pos, sweep_y_end_pos, self.print_speed)
+            self.grbl.StatusIndexSet()
+            while True:
+                time.sleep(0.1)
+                if self.grbl.StatusIndexChanged() == 1 and self.grbl.motion_state == "idle":
+                    break
+
+            sweep_x_pix -= self.printing_sweep_size
+
+        # Return to home
+        self.grbl.SerialGotoHome(self.travel_speed)
+        self.grbl.StatusIndexSet()
+        while True:
+            time.sleep(0.1)
+            if self.grbl.StatusIndexChanged() == 1 and self.grbl.motion_state == "idle":
+                break
+
+        # 5. Capture image via existing camera pipeline
+        self.camera_window.capture_sync("calibration")
+
+        # 6. Load frame from disk and detect circle
+        img_path = os.path.join(captures_dir, "calibration.png")
+        if not os.path.exists(img_path):
+            print("CALIB: capture_sync did not produce calibration.png")
+            QtWidgets.QMessageBox.warning(
+                self.ui, "Calibration Failed", "Capture did not produce calibration.png."
+            )
+            return
+
+        bgr = cv2.imread(img_path)
+        if bgr is None:
+            QtWidgets.QMessageBox.warning(
+                self.ui, "Calibration Failed", "Could not load captured image."
+            )
+            return
+        frame_rgb = cv2.cvtColor(bgr, cv2.COLOR_BGR2RGB)
+
+        result = detect_circle_in_image(frame_rgb)
+        if result is None:
+            QtWidgets.QMessageBox.warning(
+                self.ui,
+                "Auto Calibration Failed",
+                "Auto calibration failed.\nPlease re-run or check camera position.",
+            )
+            return
+
+        cx_px, cy_px, r_px = result
+        calib = compute_calibration(cx_px, cy_px, r_px)
+        save_calibration(calib, captures_dir)
+        print(f"CALIB: Saved calibration.npz  cx={cx_px:.1f} cy={cy_px:.1f} r={r_px:.1f}")
+
+        self.camera_window._update_calib_status()
+
+    # ── Config-runner helpers ──────────────────────────────────────────────────
+
+    def _config_capture_name(self, layer_idx: int, pre_or_post: str) -> str:
+        """Return capture filename stem.
+        If a config run is active use the step-aware name; otherwise fall back
+        to the original Layer_NNN_Spread/Printed convention.
+        """
+        runner = getattr(self, "_active_config_runner", None)
+        if runner is None:
+            suffix = "Spread" if pre_or_post == "pre" else "Printed"
+            return f"Layer_{layer_idx:03d}_{suffix}"
+        return runner.capture_filename(
+            runner.current_step_id, layer_idx, pre_or_post, runner.current_note
+        )
+
+    def _config_log_capture(self, layer_idx: int, pre_or_post: str,
+                             image_filename: str) -> None:
+        """Write a config_log.csv row — only when a config run is active."""
+        runner = getattr(self, "_active_config_runner", None)
+        if runner is None:
+            return
+        step = next(
+            (s for s in runner._steps if s["step_id"] == runner.current_step_id),
+            None,
+        )
+        if step is not None:
+            runner.log_capture(step, layer_idx, pre_or_post, image_filename)
+
+    def _init_print_state(self):
+        """Initialise all motion/print variables shared by both print paths.
+
+        Called by both _PrintSVG_inner and RunConfigPrint so that
+        _print_single_config_layer always finds the variables it needs.
+        """
+        self.build_center_x = 157.0
+        self.build_center_y = 116.0
+        self.print_speed    = 2200.0
+        self.travel_speed   = 3000.0
+        self.acceleration_distance  = 20.0
+        self.printing_dpi           = int(self.imageconverter.dpi)
+        self.printing_sweep_size    = int(self.printing_dpi / 2)
+        self.pixel_to_pos_multiplier = 25.4 / self.printing_dpi
+        self.image_size_x   = self.imageconverter.image_array_height
+        self.image_size_y   = self.imageconverter.image_array_width
+        self.layers         = self.imageconverter.svg_layers
+        self.svg_offset_y   = self.imageconverter.svg_height / 2
+        self.svg_offset_x   = self.imageconverter.svg_width  / 2
+        start_layer = max(1, min(self.form.start_layer_spinbox.value(), self.layers))
+        self.current_layer        = start_layer
+        self.current_layer_height = self.imageconverter.svg_layer_height[start_layer - 1]
+        self.printing_abort_flag  = 0
+        self.printing_pause_flag  = 0
+        return start_layer
+
+    def RunConfigPrint(self):
+        """Open a print_config.csv, build a ConfigRunner, and start the run in a thread."""
+        if self.file_loaded != 2:
+            QtWidgets.QMessageBox.warning(
+                self.ui, "No SVG loaded",
+                "Load an SVG file before starting a config print."
+            )
+            return
+        if self.printing_state != 0:
+            QtWidgets.QMessageBox.warning(
+                self.ui, "Already printing", "A print is already in progress."
+            )
+            return
+        csv_path, _ = QFileDialog.getOpenFileName(
+            self.ui, "Select config CSV", "", "CSV files (*.csv)"
+        )
+        if not csv_path:
+            return
+        try:
+            runner = ConfigRunner(csv_path, main_window=self)
+        except Exception as e:
+            QtWidgets.QMessageBox.critical(self.ui, "CSV Error", str(e))
+            return
+        self._active_config_runner = runner
+        self._printing_stop_event  = threading.Event()
+        self.printing_thread = threading.Thread(
+            target=self._run_config_thread, args=(runner,), daemon=True
+        )
+        self.printing_thread.start()
+
+    def _run_config_thread(self, runner: "ConfigRunner") -> None:
+        try:
+            if (self.file_loaded != 2
+                    or self.inkjet_connection_state != 1
+                    or self.grbl_connection_state != 1):
+                self._print_error_signal.emit(
+                    "Config print requires SVG loaded + GRBL + inkjet connected."
+                )
+                return
+
+            self.printing_state = 2
+            self.inkjet.ClearBuffer()
+            self.grbl.Home()
+
+            # Initialise all shared print variables (fixes AttributeError on
+            # image_size_x/y, build_center, svg_offset, current_layer_height, etc.)
+            start_layer = self._init_print_state()
+            self.inkjet.SetDPI(self.printing_dpi)
+
+            # Wait for homing
+            while self.grbl.motion_state != "idle":
+                time.sleep(0.1)
+            time.sleep(0.25)
+            self.InkjetSetPosition()
+            time.sleep(0.25)
+
+            # Spread first layer only when starting from layer 1
+            if start_layer == 1:
+                print("--- Spreading initial powder layer ---")
+                self.grbl.NewLayer(self.imageconverter.svg_layer_height[0])
+                while self.grbl.nl_state == 0:
+                    time.sleep(0.1)
+                print("--- Initial spread done ---")
+            else:
+                # Powder already at correct height — skip spread, unblock nl_state
+                self.grbl.nl_state = 1
+
+            runner.run()
+
+        except Exception:
+            import traceback
+            msg = traceback.format_exc()
+            print("CONFIG PRINT ERROR:\n" + msg)
+            self._print_error_signal.emit(f"Config print error\n\n{msg}")
+        finally:
+            self._active_config_runner = None
+            self.printing_state = 0
+
+    def _print_single_config_layer(self, step: dict, layer_idx: int) -> None:
+        """Print exactly one SVG layer using parameters already applied by ConfigRunner.
+
+        layer_idx is the index within the step (0-based); current_layer is the
+        global SVG layer counter advanced here after each layer.
+        Camera captures are handled by ConfigRunner._capture, not here.
+        All required motion variables are guaranteed to exist because
+        _run_config_thread calls _init_print_state() before runner.run().
+        """
+        svg_layer = self.current_layer
+        self.imageconverter.SVGLayerToArray(svg_layer)
+        self._print_status_signal.emit(svg_layer, self.layers)
+        self.RenderOutput()
+        print(f"[ConfigRunner] printing SVG layer {svg_layer} (step layer {layer_idx})")
+
+        # Wait for previous powder spread to settle
+        while self.grbl.nl_state == 0:
+            time.sleep(0.1)
+
+        self.save_reference_png(svg_layer)
+        self.save_reference_svg(svg_layer)
+
+        # Find X sweep bounds
+        from numpy import zeros
+        sweep_x_min, sweep_x_max = 0, 0
+        flag = 0
+        for h in range(self.image_size_x):
+            for w in range(self.image_size_y):
+                if self.imageconverter.image_array[h][w] != 0:
+                    sweep_x_min = h
+                    flag = 1
+                    break
+            if flag:
+                break
+        flag = 0
+        for h in reversed(range(self.image_size_x)):
+            for w in range(self.image_size_y):
+                if self.imageconverter.image_array[h][w] != 0:
+                    sweep_x_max = h
+                    flag = 1
+                    break
+            if flag:
+                break
+
+        sweep_x_size = sweep_x_max - sweep_x_min
+        sweeps = sweep_x_size // self.printing_sweep_size
+        if sweep_x_size % self.printing_sweep_size != 0:
+            sweeps += 1
+
+        for _pass in range(self.layer_passes):
+            sweep_x_pix = sweep_x_max - self.printing_sweep_size
+            for _s in range(sweeps):
+                sweep_x_pos = (
+                    sweep_x_pix * self.pixel_to_pos_multiplier
+                    + self.build_center_x - self.svg_offset_x
+                )
+                sweep_y_min, sweep_y_max = 0, 0
+                flag = 0
+                for w in range(self.image_size_y):
+                    for h in range(int(sweep_x_pix),
+                                   int(sweep_x_pix + self.printing_sweep_size)):
+                        if h > 0 and self.imageconverter.image_array[h][w] != 0:
+                            sweep_y_min = w
+                            flag = 1
+                            break
+                    if flag:
+                        break
+                flag = 0
+                for w in reversed(range(self.image_size_y)):
+                    for h in range(int(sweep_x_pix),
+                                   int(sweep_x_pix + self.printing_sweep_size)):
+                        if h > 0 and self.imageconverter.image_array[h][w] != 0:
+                            sweep_y_max = w
+                            flag = 1
+                            break
+                    if flag:
+                        break
+
+                sweep_y_start_pos = (
+                    sweep_y_min * self.pixel_to_pos_multiplier
+                    + self.build_center_y - self.svg_offset_y
+                    - self.acceleration_distance
+                )
+                sweep_y_end_pos = (
+                    sweep_y_max * self.pixel_to_pos_multiplier
+                    + self.build_center_y - self.svg_offset_y
+                    + self.acceleration_distance
+                )
+
+                temp_arr = zeros(self.printing_sweep_size)
+                temp_hist = B64.B64ToArray(temp_arr)
+                temp_pos = (
+                    (sweep_y_min - 1) * self.pixel_to_pos_multiplier
+                    + self.build_center_y - self.svg_offset_y
+                ) * 1000
+                self.inkjet.SerialWriteBufferRaw(
+                    "SBR " + B64.B64ToSingle(temp_pos) + " " + temp_hist
+                )
+                for w in range(sweep_y_min, sweep_y_max):
+                    ctr = 0
+                    for h in range(int(sweep_x_pix),
+                                   int(sweep_x_pix + self.printing_sweep_size)):
+                        temp_arr[ctr] = (
+                            self.imageconverter.image_array[h][w] if h >= 0 else 0
+                        )
+                        ctr += 1
+                    new_str = B64.B64ToArray(temp_arr)
+                    if new_str != temp_hist:
+                        temp_hist = new_str
+                        temp_pos = (
+                            w * self.pixel_to_pos_multiplier
+                            + self.build_center_y - self.svg_offset_y
+                        ) * 1000
+                        self.inkjet.SerialWriteBufferRaw(
+                            "SBR " + B64.B64ToSingle(temp_pos) + " " + new_str
+                        )
+                temp_arr = zeros(self.printing_sweep_size)
+                temp_pos = (
+                    (sweep_y_max + 1) * self.pixel_to_pos_multiplier
+                    + self.build_center_y - self.svg_offset_y
+                ) * 1000
+                self.inkjet.SerialWriteBufferRaw(
+                    "SBR " + B64.B64ToSingle(temp_pos) + " " + B64.B64ToArray(temp_arr)
+                )
+
+                self.grbl.SerialGotoXY(sweep_x_pos, sweep_y_start_pos, self.travel_speed)
+                self.grbl.StatusIndexSet()
+                while True:
+                    time.sleep(0.1)
+                    if (self.grbl.StatusIndexChanged() == 1
+                            and self.grbl.motion_state == "idle"):
+                        break
+                while self.inkjet.BufferLeft() > 0:
+                    time.sleep(0.1)
+                time.sleep(0.2)
+                self.InkjetSetPosition()
+                time.sleep(0.2)
+                self.grbl.SerialGotoXY(sweep_x_pos, sweep_y_end_pos, self.print_speed)
+                self.grbl.StatusIndexSet()
+                while True:
+                    time.sleep(0.1)
+                    if (self.grbl.StatusIndexChanged() == 1
+                            and self.grbl.motion_state == "idle"):
+                        break
+
+                if self.printing_abort_flag == 1:
+                    return
+
+                sweep_x_pix -= self.printing_sweep_size
+
+        # Return gantry home — post capture happens in ConfigRunner._capture()
+        # after this function returns, so NewLayer() must come after that.
+        # We store the next thickness here and let the caller trigger spreading.
+        self.grbl.SerialGotoHome(self.travel_speed)
+        self.grbl.StatusIndexSet()
+        while True:
+            time.sleep(0.1)
+            if (self.grbl.StatusIndexChanged() == 1
+                    and self.grbl.motion_state == "idle"):
+                break
+
+        self.current_layer += 1
+        if self.current_layer < self.layers:
+            next_h    = self.imageconverter.svg_layer_height[self.current_layer]
+            self._pending_layer_thickness = next_h - self.current_layer_height
+            self.current_layer_height     = next_h
+        else:
+            self._pending_layer_thickness = None
+
+    # ── End config-runner helpers ──────────────────────────────────────────────
+
     def PrintSVG(self):
         """Prints the currently loaded SVG file if present.
         This will not check powder levels, ink levels and if file is much more than theoretically possible
@@ -871,7 +1785,7 @@ class MainWindow(QtWidgets.QMainWindow):
             layer = getattr(self, "current_layer", "?")
             total = getattr(self, "layers", "?")
             self._print_error_signal.emit(
-                f"인쇄 중 오류 발생 (Layer {layer} / {total})\n\n{msg}"
+                f"Print error (Layer {layer} / {total})\n\n{msg}"
             )
             self.printing_state = 0
 
@@ -893,78 +1807,44 @@ class MainWindow(QtWidgets.QMainWindow):
             and self.inkjet_connection_state == 1
             and self.grbl_connection_state == 1
         ):
-            self.printing_state = 2  # set printing state
-            self.inkjet.ClearBuffer()  # clear inkjet buffer on HP45
+            self.printing_state = 2
+            self.inkjet.ClearBuffer()
+            self.grbl.Home()
 
-            self.grbl.Home()  # home printer
-
-            # make variables
-
-            # going to fool around with these to find the offset. the originals will be maintained in the comments
-            # SHIFT THESE TO CENTER PRINT ON PRINTBED
-            self.build_center_x = (
-                157  # 147 #OG 157.0 #where the center of the build platform is
-            )
-
-            self.build_center_y = (
-                116  # 121.0 #OG 111 #where the center of the build platform is
-            )
-
-            self.print_speed = 2200  # 2200 #OG 2200.0 #how fast to print
-            self.travel_speed = 3000.0  # how fast to travel
-
-            self.acceleration_distance = 20.0  # how much to accelerate before printing
-            self.printing_dpi = int(self.imageconverter.dpi)  # the set DPI
-            self.printing_sweep_size = int(self.printing_dpi / 2)  # the sweep size
-            self.pixel_to_pos_multiplier = (
-                25.4 / self.printing_dpi
-            )  # 25.4 #the value from pixel to mm
-            # this setting shrinks the print by the uniform scaling factor
-
-            self.image_size_x = (
-                self.imageconverter.image_array_height
-            )  # the max size of image, in X-direction
-            self.image_size_y = (
-                self.imageconverter.image_array_width
-            )  # the max size of image, in Y-direction
-            self.layers = self.imageconverter.svg_layers  # how many layers there are
-            start_layer = max(1, min(self.form.start_layer_spinbox.value(), self.layers))
-            self.current_layer = start_layer
-            self.current_layer_height = self.imageconverter.svg_layer_height[start_layer - 1]
+            start_layer = self._init_print_state()
             print("Starting print at height: " + str(self.current_layer_height))
-
-            # set flags
-            self.printing_abort_flag = 0
-            self.printing_pause_flag = 0
-
-            # set inkjet settings
             self.inkjet.SetDPI(self.printing_dpi)
 
-            # set motion settings
-
-            # check file
-            # offsets given above are assumed to be the center of bed
-            # calculate offsets for centering file
-            # width is Y, height is X
-            # self.svg_offset_x = self.imageconverter.svg_height / 2
-            # self.svg_offset_y = self.imageconverter.svg_width / 2
-            # I flipped these because of a boo-boo somewhere.
-            self.svg_offset_y = self.imageconverter.svg_height / 2
-            self.svg_offset_x = self.imageconverter.svg_width / 2
-
             # Wait till homing is done
-            if (
-                self.grbl_connection_state == 1
-            ):  # conditional for testing, only wait for home if there is home to wait on
-                while self.grbl.motion_state != "idle":
-                    time.sleep(0.1)
-                    pass
+            while self.grbl.motion_state != "idle":
+                time.sleep(0.1)
 
             time.sleep(0.25)  # extra delay so the system can stabilize
             self.InkjetSetPosition()  # set position
             time.sleep(0.25)  # extra delay so position can be set
 
             # add priming purge here, with motions to start the printhead
+
+            # Spread the first powder layer only when starting from layer 1.
+            # If resuming mid-print (start_layer > 1), powder is already at the
+            # correct height — skip spreading and start printing immediately.
+            if start_layer == 1:
+                print("--- Spreading initial powder layer ---")
+                self.grbl.NewLayer(self.imageconverter.svg_layer_height[0])
+                while self.grbl.nl_state == 0:
+                    time.sleep(0.1)
+                print("--- Initial spread done, capturing photo ---")
+                if hasattr(self, "camera_window"):
+                    self.save_reference_png(self.current_layer)
+                    self.save_reference_svg(self.current_layer)
+                    _fname = self._config_capture_name(0, "pre")
+                    self.camera_window.capture_sync(_fname)
+                    self._config_log_capture(0, "pre", _fname)
+
+            # When resuming mid-print, no NewLayer() was called above, so
+            # nl_state may still be 0 — force it to 1 to skip the initial wait.
+            if start_layer > 1:
+                self.grbl.nl_state = 1
 
             # start printing
             while True:
@@ -979,13 +1859,17 @@ class MainWindow(QtWidgets.QMainWindow):
                     time.sleep(0.1)
                     pass
 
-                # --- INSERTION 1: Photo After Recoating (Spread) ---
-                # The recoater has just finished spreading the new layer.
+                # v1.1.5 HOOK — save image_array for current layer as reference PNG + SVG
                 if hasattr(self, "camera_window"):
-                    self.camera_window.capture_sync(
-                        f"Layer_{self.current_layer:03d}_Spread"
-                    )
-                # ---------------------------------------------------
+                    self.save_reference_png(self.current_layer)
+                    self.save_reference_svg(self.current_layer)
+
+                # --- Photo After Recoating (Spread) ---
+                if hasattr(self, "camera_window"):
+                    _fname = self._config_capture_name(self.current_layer, "pre")
+                    self.camera_window.capture_sync(_fname)
+                    self._config_log_capture(self.current_layer, "pre", _fname)
+                # ----------------------------------------
 
                 # check abort state
                 if self.printing_abort_flag == 1:
@@ -1285,9 +2169,9 @@ class MainWindow(QtWidgets.QMainWindow):
                         ):
                             break
                     if hasattr(self, "camera_window"):
-                        self.camera_window.capture_sync(
-                            f"Layer_{self.current_layer - 1:03d}_Printed"
-                        )
+                        _fname = self._config_capture_name(self.current_layer - 1, "post")
+                        self.camera_window.capture_sync(_fname)
+                        self._config_log_capture(self.current_layer - 1, "post", _fname)
                     break
 
                 # check exit conditions
@@ -1307,9 +2191,9 @@ class MainWindow(QtWidgets.QMainWindow):
                             and self.grbl.motion_state == "idle"
                         ):
                             break
-                    self.camera_window.capture_sync(
-                        f"Layer_{self.current_layer - 1:03d}_Printed"
-                    )
+                    _fname = self._config_capture_name(self.current_layer - 1, "post")
+                    self.camera_window.capture_sync(_fname)
+                    self._config_log_capture(self.current_layer - 1, "post", _fname)
 
                 # Add next layer — nl_state set to 0 inside NewLayer()
                 temp_layer_thickness = (
@@ -1346,7 +2230,7 @@ class MainWindow(QtWidgets.QMainWindow):
             import traceback
             msg = traceback.format_exc()
             print("PRINT ERROR:\n" + msg)
-            self._print_error_signal.emit(f"인쇄 중 오류 발생\n\n{msg}")
+            self._print_error_signal.emit(f"Print error\n\n{msg}")
             self.printing_state = 0
 
     def _PrintArray_inner(self):
@@ -1614,7 +2498,7 @@ class MainWindow(QtWidgets.QMainWindow):
         # self.grbl.Home() #home gantry
 
     def closeEvent(self, event):
-        """창 닫힐 때 모든 스레드 정리 후 프로세스 종료"""
+        """Clean up all threads then exit the process on window close."""
         if hasattr(self, "_grbl_stop_event"):
             self._grbl_stop_event.set()
         if hasattr(self, "_inkjet_stop_event"):

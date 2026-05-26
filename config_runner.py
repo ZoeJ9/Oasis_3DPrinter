@@ -146,11 +146,13 @@ class ConfigRunner:
         mw.config_layer_thickness = float(step["layer_thickness"])
         mw.config_overfeed        = float(step["overfeed"])
 
-        # Inkjet hardware DPI only — do NOT touch imageconverter.SetDPI(),
-        # printing_dpi, printing_sweep_size, or pixel_to_pos_multiplier.
-        # Those are tied to the pixel array size set at print-start and must
-        # stay consistent; changing them mid-print shifts all coordinates.
-        mw.inkjet.SetDPI(int(step["dpi"]))
+        # inkjet.SetDPI() changes nozzle fire interval (hardware only).
+        # printing_sweep_size must track inkjet DPI so each sweep covers the
+        # correct physical width. pixel_to_pos_multiplier and imageconverter
+        # are NOT touched — coordinates stay tied to the original pixel array.
+        inkjet_dpi = int(step["dpi"])
+        mw.inkjet.SetDPI(inkjet_dpi)
+        mw.printing_sweep_size = inkjet_dpi // 2
         mw.inkjet.SetDensity(int(step["density"]))
         mw.inkjet.Preheat(int(step["preheat"]))
         mw.inkjet.Prime(int(step["prime"]))

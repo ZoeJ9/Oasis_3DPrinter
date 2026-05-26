@@ -24,6 +24,35 @@ Other useful components:
 
 ## Changelog
 
+### v2.2 (2026-05-26)
+
+**Fix: `printing_sweep_size` tracks inkjet DPI during config run**
+
+`ConfigRunner._apply_step()` now updates `mw.printing_sweep_size = inkjet_dpi // 2`
+whenever `inkjet.SetDPI()` is called. Previously, changing inkjet DPI mid-print left
+`printing_sweep_size` at the original value, causing output size and sweep positions to
+shift. `pixel_to_pos_multiplier` and `imageconverter` remain untouched.
+
+---
+
+### v2.1 (2026-05-24)
+
+**CSV-driven parameter sweep (DOE) integration** — `Oasis_printer_v2.1.py`:
+
+- `config_runner.py`: `ConfigRunner` class loads `print_config.csv` and drives
+  layer-by-layer printing with per-step parameter overrides
+- Per-step parameters: `print_speed`, `travel_speed`, `layer_thickness`, `dpi`,
+  `density`, `preheat`, `prime`, `layer_passes`, `overfeed`
+- Step-aware image filenames: `s001_L003_pre_baseline.png` / `_post_`
+- Per-capture CSV log: `config_log.csv` alongside the config file
+- Post-capture timing: photo taken before `NewLayer()` so powder doesn't cover print
+- `_init_print_state()` shared by both normal and config print paths
+- `QFileDialog` parent fixed to `self.ui` (prevents window resize on CSV upload)
+- All Korean strings replaced with English
+- Smoke test: `test_config_runner_smoke.py`
+
+---
+
 ### v1.3.1 (2026-05-22)
 
 **Camera capture quality overhaul** — validated settings for 175 mm bed setup:
