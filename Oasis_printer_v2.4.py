@@ -398,6 +398,14 @@ class MainWindow(QtWidgets.QMainWindow):
         # grbl home button
         self.form.motion_home.clicked.connect(self.grbl.Home)
 
+        # Emergency unlock button — bypasses homing, coordinates unreliable
+        self._emergency_btn = QtWidgets.QPushButton("⚠ Emergency Unlock")
+        self._emergency_btn.setStyleSheet("background-color: #ff4444; color: white; font-weight: bold;")
+        self._emergency_btn.setToolTip("Send $X to clear GRBL alarm and enable jog without homing.\nCoordinates will be unreliable.")
+        self._emergency_btn.clicked.connect(self._EmergencyUnlock)
+        _motion_layout = self.form.motion_home.parentWidget().layout()
+        _motion_layout.addWidget(self._emergency_btn, _motion_layout.rowCount(), 0, 1, 4)
+
         # grbl jog buttons
         self.form.motion_xp.clicked.connect(lambda: self.grbl.Jog("X", "10", "6000"))
         self.form.motion_xn.clicked.connect(lambda: self.grbl.Jog("X", "-10", "6000"))
@@ -553,6 +561,23 @@ class MainWindow(QtWidgets.QMainWindow):
 
         self.form.inkjet_set_port.clear()
         self.form.inkjet_set_port.addItems(result)
+
+    def _EmergencyUnlock(self):
+        """Clear GRBL alarm lock without homing — jog becomes available immediately.
+        WARNING: machine coordinates are unreliable until a proper Home() is run."""
+        if self.grbl_connection_state != 1:
+            QtWidgets.QMessageBox.warning(
+                self.ui, "Not Connected", "Connect to GRBL before using Emergency Unlock."
+            )
+            return
+        reply = QtWidgets.QMessageBox.warning(
+            self.ui,
+            "Emergency Unlock",
+            "This bypasses homing. Machine coordinates will be unreliable.\n\nProceed?",
+            QtWidgets.QMessageBox.Yes | QtWidgets.QMessageBox.No,
+        )
+        if reply == QtWidgets.QMessageBox.Yes:
+            self.grbl.EmergencyUnlock()
 
     def GrblConnect(self):
         """Gets the GRBL serial port and attempt to connect to it"""

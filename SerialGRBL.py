@@ -421,7 +421,14 @@ class GRBL(serial.Serial):
         self.SerialWriteBufferRaw('G92 X' + str(temp_x) + ' Y' + str(temp_y))#buffer G92 command
         self.homed_state = 2 #set homed state to 2 (homing in progress)
         self.motion_state = "home" #set status
-    
+
+    def EmergencyUnlock(self):
+        """Send $X to clear GRBL alarm lock and force homed_state=1.
+        Bypasses homing — coordinates are unreliable. Use only in emergencies."""
+        self.SerialWriteBufferRaw('$X')
+        self.homed_state = 1
+        print("EMERGENCY UNLOCK: alarm cleared, homed_state forced to 1 (coordinates unreliable)")
+
     def GetStatus(self):
         """periodically sends a ? to get status"""
         time.sleep(5) #initial wait to get system time to start
