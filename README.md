@@ -24,6 +24,16 @@ Other useful components:
 
 ## Changelog
 
+### v2.5 (2026-05-27)
+
+**Camera exposure control in Camera Settings UI**
+
+- Added "Exposure" spinbox (range -7 to -1, log₂ seconds) to Camera Settings window
+- `capture_sync()` uses `self.exposure_value` instead of the hardcoded `EXPOSURE_VALUE` constant
+- Default value matches existing `EXPOSURE_VALUE = -3`
+
+---
+
 ### v2.4 (2026-05-26)
 
 **Mid-print cleaning: checkbox enable + UI snapshot**
