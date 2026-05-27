@@ -24,6 +24,17 @@ Other useful components:
 
 ## Changelog
 
+### v2.6 (2026-05-27)
+
+**Capture quality: outlier rejection + centre crop**
+
+- `WARMUP_FRAMES` increased 5 → 15 (exposure settles before capture)
+- Frames whose mean brightness deviates >10% from the median are discarded before averaging
+- Output cropped to centre 80% of full resolution to discard blurry lens edges
+- Applies to all captures including calibration (all go through `capture_sync`)
+
+---
+
 ### v2.5 (2026-05-27)
 
 **Camera exposure control in Camera Settings UI**
