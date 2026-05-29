@@ -1,25 +1,33 @@
-import cv2
-
-cap = cv2.VideoCapture(0, cv2.CAP_DSHOW)
-cap.set(cv2.CAP_PROP_FOURCC, cv2.VideoWriter_fourcc(*'MJPG'))
-# 풀해상도는 1.3fps라 포커싱이 답답함 → 1080p로 빠르게 맞춘 후 풀해상도 캡처
-cap.set(cv2.CAP_PROP_FRAME_WIDTH,  1920)
-cap.set(cv2.CAP_PROP_FRAME_HEIGHT, 1080)
-cap.set(cv2.CAP_PROP_AUTO_EXPOSURE, 0.25)
-cap.set(cv2.CAP_PROP_EXPOSURE, -6)  # 1080p는 더 밝음, -6 정도
-
-while True:
-    ok, frame = cap.read()
-    if not ok: continue
+def focus_assist_fullres(num_iterations=20):
+    """풀해상도에서 천천히 sharpness 측정하면서 미세 포커싱."""
+    cap = open_camera(resolution=RESOLUTION_FULL,
+                      exposure=EXPOSURE_VALUE)  # 실제 캡처와 동일 노출
     
-    gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
-    sharp = cv2.Laplacian(gray, cv2.CV_64F).var()
+    # 화면 가운데 1000x1000만 측정 (전체 보면 너무 느림)
+    cx, cy = 3500, 2500
+    w, h = 1000, 1000
     
-    cv2.putText(frame, f"sharpness: {sharp:.1f}",
-                (30, 60), cv2.FONT_HERSHEY_SIMPLEX, 1.5, (0,255,0), 3)
-    cv2.imshow("focus assist", frame)
+    print("렌즈 천천히 돌리세요. Ctrl+C로 종료.")
+    print(f"(한 측정에 ~{1/1.3:.1f}초)")
     
-    if cv2.waitKey(1) & 0xFF == ord('q'): break
-
-cap.release()
-cv2.destroyAllWindows()
+    history = []
+    try:
+        for i in range(num_iterations):
+            ok, frame = cap.read()
+            if not ok: continue
+            
+            crop = frame[cy:cy+h, cx:cx+w]
+            gray = cv2.cvtColor(crop, cv2.COLOR_BGR2GRAY)
+            s = cv2.Laplacian(gray, cv2.CV_64F).var()
+            history.append(s)
+            
+            # 최근 5장 중 최고 표시
+            recent_max = max(history[-5:])
+            arrow = "★" if s == recent_max else " "
+            print(f"  [{i:3d}] sharpness={s:7.1f}  recent_max={recent_max:7.1f} {arrow}")
+    except KeyboardInterrupt:
+        pass
+    finally:
+        cap.release()
+    
+    print(f"\n최고값: {max(history):.1f}")
