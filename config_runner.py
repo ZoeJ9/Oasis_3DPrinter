@@ -19,6 +19,7 @@ import pandas as pd
 _VALID = {
     "print_speed":     {1100, 2200, 3300},
     "travel_speed":    {1800, 3000, 5000},
+    "spread_speed":    {1000, 3000, 6000, 10000},
     "layer_thickness": {0.05, 0.1, 0.2},
     "dpi":             {150, 300, 600},
     "density":         {100, 250, 500},
@@ -31,6 +32,7 @@ _DEFAULTS = {
     "layers":          15,
     "print_speed":     2200,
     "travel_speed":    3000,
+    "spread_speed":    6000,
     "layer_thickness": 0.1,
     "dpi":             300,
     "density":         250,
@@ -39,13 +41,13 @@ _DEFAULTS = {
     "note":            "default",
 }
 
-_INT_COLS   = {"step_id", "layers", "print_speed", "travel_speed",
+_INT_COLS   = {"step_id", "layers", "print_speed", "travel_speed", "spread_speed",
                "dpi", "density", "layer_passes"}
 _FLOAT_COLS = {"layer_thickness", "overfeed"}
 
 LOG_COLUMNS = [
     "timestamp", "step_id", "layer_idx", "pre_or_post", "note",
-    "image_filename", "print_speed", "travel_speed", "layer_thickness",
+    "image_filename", "print_speed", "travel_speed", "spread_speed", "layer_thickness",
     "dpi", "density", "layer_passes", "overfeed",
 ]
 
@@ -134,9 +136,10 @@ class ConfigRunner:
         if mw is None:
             return
 
-        mw.print_speed  = float(step["print_speed"])
-        mw.travel_speed = float(step["travel_speed"])
-        mw.layer_passes = int(step["layer_passes"])
+        mw.print_speed          = float(step["print_speed"])
+        mw.travel_speed         = float(step["travel_speed"])
+        mw.grbl.nl_feed_speed   = float(step["spread_speed"])
+        mw.layer_passes         = int(step["layer_passes"])
 
         # Store thickness and overfeed as instance attrs for _print_single_config_layer
         mw.config_layer_thickness = float(step["layer_thickness"])
@@ -176,6 +179,7 @@ class ConfigRunner:
             "image_filename":  image_filename + ".png",
             "print_speed":     step["print_speed"],
             "travel_speed":    step["travel_speed"],
+            "spread_speed":    step["spread_speed"],
             "layer_thickness": step["layer_thickness"],
             "dpi":             step["dpi"],
             "density":         step["density"],
