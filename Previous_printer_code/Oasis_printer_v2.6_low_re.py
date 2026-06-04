@@ -967,7 +967,7 @@ class MainWindow(QtWidgets.QMainWindow):
 
     def _CheckMaxHeight(self):
         """Warn if total structure height exceeds 21mm (210 layers × 0.1mm)."""
-        MAX_HEIGHT_MM = 21.0  # 210 layers × 0.1mm
+        MAX_HEIGHT_MM = 50.0  # 500 layers × 0.1mm
         if not self.imageconverter.svg_layer_height:
             return
         total_height = self.imageconverter.svg_layer_height[-1]  # mm

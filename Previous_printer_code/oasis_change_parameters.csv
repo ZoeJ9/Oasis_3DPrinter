@@ -1,0 +1,21 @@
+parameter_name,Type of variable,value,unit,min,max,category,description,code_variable
+print_speed,Variance,2200,mm/min,100,10000,Motion,Printing sweep speed,self.print_speed
+travel_speed,fixed,3000,mm/min,100,5000,Motion,Travel (non-printing) speed,self.travel_speed
+layer_thickness,Variance,0.1,mm,0.05,2,Motion,Layer thickness (0.05 mm per slider unit),motion_layer_thickness
+layer_passes,Variance ,3,-,1,5,How many times repeat for one layer print ,layer_passes,
+overfeed_percent,Variance,100,%,175,500,Motion,Powder overfeed percentage (80 + slider*5),motion_overfeed
+jog_xy_distance,fixed,10,mm,-,-,Motion,XY jog step distance,grbl.Jog
+jog_xy_speed,fixed,6000,mm/min,-,-,Motion,XY jog speed,grbl.Jog
+jog_z_distance,fixed,1,mm,-,-,Motion,Z/A (front/back roller) jog step,grbl.Jog
+jog_z_speed,fixed,150,mm/min,-,-,Motion,Z/A jog speed,grbl.Jog
+dpi,Variance,300,dpi,100,1200,Inkjet,Print resolution (dots per inch),inkjet.SetDPI
+density,variance,500,permille,0,1000,Inkjet,Ink firing density (value x10 from 1-100 slider),inkjet.SetDensity
+preheat_pulses,Variance,5000,pulses,Not sure,Not sure,Inkjet,Number of preheat pulses sent to printhead,inkjet.Preheat
+prime_pulses,Variance,100,pulses,Not sure,Not sure,Inkjet,Number of prime pulses sent to printhead,inkjet.Prime
+inkjet_position_delay,fixed,0.3,s,-,-,Inkjet,Delay before reading GRBL position for inkjet sync,InkjetSetPosition
+dwell_time,fixed,5,s,-,-,Capture,Wait time between photo captures,photo()
+capture_output_dir,fixed,captured_images,path,-,-,Capture,Directory for saving captured webcam images,output_dir
+webcam_index,fixed,1,index,-,-,Capture,OpenCV webcam device index (0=built-in 1=external),cv2.VideoCapture
+svg_offset_x,fixed,auto,mm,-,-,SVG,SVG X offset (half of svg_width; auto = computed),self.svg_offset_x
+svg_offset_y,fixed,auto,mm,-,-,SVG,SVG Y offset (half of svg_height; auto = computed),self.svg_offset_y
+threshold,fixed,128,0-255,-,-,Image,Binarization threshold for bitmap images,threshold_slider
