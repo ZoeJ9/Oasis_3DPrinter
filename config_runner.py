@@ -22,8 +22,6 @@ _VALID = {
     "layer_thickness": {0.05, 0.1, 0.2},
     "dpi":             {150, 300, 600},
     "density":         {100, 250, 500},
-    "preheat":         {0, 1, 10},
-    "prime":           {0, 15, 100},
     "layer_passes":    {1, 3, 5},
     "overfeed":        {1.75, 2.5, 5.0},
 }
@@ -36,21 +34,19 @@ _DEFAULTS = {
     "layer_thickness": 0.1,
     "dpi":             300,
     "density":         250,
-    "preheat":         1,
-    "prime":           15,
     "layer_passes":    3,
     "overfeed":        2.5,
     "note":            "default",
 }
 
 _INT_COLS   = {"step_id", "layers", "print_speed", "travel_speed",
-               "dpi", "density", "preheat", "prime", "layer_passes"}
+               "dpi", "density", "layer_passes"}
 _FLOAT_COLS = {"layer_thickness", "overfeed"}
 
 LOG_COLUMNS = [
     "timestamp", "step_id", "layer_idx", "pre_or_post", "note",
     "image_filename", "print_speed", "travel_speed", "layer_thickness",
-    "dpi", "density", "preheat", "prime", "layer_passes", "overfeed",
+    "dpi", "density", "layer_passes", "overfeed",
 ]
 
 
@@ -154,8 +150,6 @@ class ConfigRunner:
         mw.inkjet.SetDPI(inkjet_dpi)
         mw.printing_sweep_size = inkjet_dpi // 2
         mw.inkjet.SetDensity(int(step["density"]))
-        mw.inkjet.Preheat(int(step["preheat"]))
-        mw.inkjet.Prime(int(step["prime"]))
 
         print(
             f"[ConfigRunner] step {step['step_id']} ({step['note']}): "
@@ -185,8 +179,6 @@ class ConfigRunner:
             "layer_thickness": step["layer_thickness"],
             "dpi":             step["dpi"],
             "density":         step["density"],
-            "preheat":         step["preheat"],
-            "prime":           step["prime"],
             "layer_passes":    step["layer_passes"],
             "overfeed":        step["overfeed"],
         }
