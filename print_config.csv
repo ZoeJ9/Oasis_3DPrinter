@@ -1,4 +1,4 @@
-step_id,layers,print_speed,spread_speed,layer_thickness,dpi,density,layer_passes,overfeed,travel_speed,note
-1,15,2200,6000,0.1,300,250,3,2.5,3000,baseline
-2,10,1100,3000,0.05,150,100,1,1.75,1800,low_speed_thin
-3,12,3300,10000,0.2,600,500,5,5.0,5000,high_speed_thick
+step_id,layers,print_speed,spread_speed,layer_thickness,dpi,density,layer_passes,overfeed,separation_layers,travel_speed,note
+1,15,2200,6000,0.1,300,250,3,2.5,15,3000,baseline
+2,10,1100,3000,0.05,150,100,1,1.75,15,1800,low_speed_thin
+3,12,3300,10000,0.2,600,500,5,5.0,15,5000,high_speed_thick

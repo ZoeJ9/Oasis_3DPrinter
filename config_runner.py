@@ -23,8 +23,9 @@ _VALID = {
     "layer_thickness": {0.05, 0.1, 0.2},
     "dpi":             {150, 300, 600},
     "density":         {100, 250, 500},
-    "layer_passes":    {1, 3, 5},
-    "overfeed":        {1.75, 2.5, 5.0},
+    "layer_passes":      {1, 3, 5},
+    "overfeed":          {1.75, 2.5, 5.0},
+    "separation_layers": {0, 5, 10, 15, 20},
 }
 
 # Defaults = medium values from the DOE table
@@ -37,18 +38,19 @@ _DEFAULTS = {
     "dpi":             300,
     "density":         250,
     "layer_passes":    3,
-    "overfeed":        2.5,
-    "note":            "default",
+    "overfeed":          2.5,
+    "separation_layers": 15,
+    "note":              "default",
 }
 
 _INT_COLS   = {"step_id", "layers", "print_speed", "travel_speed", "spread_speed",
-               "dpi", "density", "layer_passes"}
+               "dpi", "density", "layer_passes", "separation_layers"}
 _FLOAT_COLS = {"layer_thickness", "overfeed"}
 
 LOG_COLUMNS = [
     "timestamp", "step_id", "layer_idx", "pre_or_post", "note",
     "image_filename", "print_speed", "travel_speed", "spread_speed", "layer_thickness",
-    "dpi", "density", "layer_passes", "overfeed",
+    "dpi", "density", "layer_passes", "overfeed", "separation_layers",
 ]
 
 
@@ -145,11 +147,16 @@ class ConfigRunner:
         mw.config_layer_thickness = float(step["layer_thickness"])
         mw.config_overfeed        = float(step["overfeed"])
 
-        # inkjet.SetDPI() changes nozzle fire interval (hardware only).
-        # printing_sweep_size must track inkjet DPI so each sweep covers the
-        # correct physical width. pixel_to_pos_multiplier and imageconverter
-        # are NOT touched — coordinates stay tied to the original pixel array.
+        # When DPI changes, regenerate the pixel array via imageconverter.SetDPI()
+        # and update all derived print variables so coordinates stay consistent.
         inkjet_dpi = int(step["dpi"])
+        if inkjet_dpi != int(mw.imageconverter.dpi):
+            mw.imageconverter.SetDPI(inkjet_dpi)
+            mw.printing_dpi          = inkjet_dpi
+            mw.printing_sweep_size   = inkjet_dpi // 2
+            mw.pixel_to_pos_multiplier = 25.4 / inkjet_dpi
+            mw.image_size_x          = mw.imageconverter.image_array_height
+            mw.image_size_y          = mw.imageconverter.image_array_width
         mw.inkjet.SetDPI(inkjet_dpi)
         mw.printing_sweep_size = inkjet_dpi // 2
         mw.inkjet.SetDensity(int(step["density"]))
@@ -183,8 +190,9 @@ class ConfigRunner:
             "layer_thickness": step["layer_thickness"],
             "dpi":             step["dpi"],
             "density":         step["density"],
-            "layer_passes":    step["layer_passes"],
-            "overfeed":        step["overfeed"],
+            "layer_passes":      step["layer_passes"],
+            "overfeed":          step["overfeed"],
+            "separation_layers": step["separation_layers"],
         }
         write_header = not self._log_exists
         with open(self._log_path, "a", newline="") as f:
@@ -209,24 +217,41 @@ class ConfigRunner:
     # ── Main entry point ───────────────────────────────────────────────────────
 
     def run(self) -> None:
-        """Execute all steps in order.  Call this instead of the bare layer loop."""
+        """Execute all steps in order.  Call this instead of the bare layer loop.
+
+        Each step prints the full SVG from layer 1 (SVG counter resets per step).
+        After all SVG layers are printed, separation_layers blank recoats are done
+        before the next step begins.
+        """
         for step in self._steps:
             self.current_step_id = step["step_id"]
             self.current_note    = step["note"]
 
             self._apply_step(step)
 
-            n_layers = int(step["layers"])
+            # Reset SVG layer counter to 1 at the start of every step
+            if self.mw is not None:
+                self.mw.current_layer        = 1
+                self.mw.current_layer_height = self.mw.imageconverter.svg_layer_height[0]
+
+            n_svg = self.mw.imageconverter.svg_layers if self.mw is not None else int(step["layers"])
             print(
                 f"[ConfigRunner] === Step {step['step_id']}: "
-                f"{n_layers} layers, note='{step['note']}' ==="
+                f"{n_svg} SVG layers, sep={step['separation_layers']}, "
+                f"note='{step['note']}' ==="
             )
 
-            for layer_idx in range(n_layers):
+            for layer_idx in range(n_svg):
                 self._capture(step, layer_idx, "pre")
                 self._print_one_layer(step, layer_idx)
-                self._capture(step, layer_idx, "post")   # before next spread
+                self._capture(step, layer_idx, "post")
                 self._start_next_spread()
+
+            # Blank recoats between steps (no SBR — powder only)
+            n_sep = int(step["separation_layers"])
+            if n_sep > 0:
+                print(f"[ConfigRunner] {n_sep} separation layer(s) after step {step['step_id']}")
+                self._separation_spread(step, n_sep)
 
         print("[ConfigRunner] Config run complete.")
 
@@ -248,3 +273,21 @@ class ConfigRunner:
         if thickness is not None:
             self.mw.grbl.NewLayer(thickness)
             self.mw._pending_layer_thickness = None
+
+    def _separation_spread(self, step: dict, n: int) -> None:
+        """Spread powder N times without printing (no SBR).
+
+        Uses the last SVG layer_thickness as the recoat increment.
+        Waits for each spread to complete before triggering the next.
+        """
+        if self.mw is None:
+            print(f"[ConfigRunner] (no-hw) separation: {n} blank recoats")
+            return
+        thickness = float(step["layer_thickness"])
+        import time
+        for i in range(n):
+            print(f"[ConfigRunner] separation spread {i + 1}/{n} (thickness={thickness}mm)")
+            self.mw.grbl.NewLayer(thickness)
+            # Wait for spread to complete
+            while self.mw.grbl.nl_state == 0:
+                time.sleep(0.1)
