@@ -57,15 +57,21 @@ EXPOSURE_VALUE        = -3             # log2(seconds). -3 = 1/8s
 GAIN_VALUE            = 0
 AUTO_WB               = 0             # 0 = manual lock
 
-WARMUP_FRAMES         = 5
+WARMUP_FRAMES         = 0
 
-AVERAGING_FRAMES      = 10            # noise reduction (1 = off)
+AVERAGING_FRAMES      = 1             # noise reduction (1 = off)
 UNSHARP_SIGMA         = 2.5
 UNSHARP_AMOUNT        = 1.2           # 0 = sharpening off
 # ============================================================
 
 
 # --- INSERTION: New Camera Controller Class ---
+
+LED_SETTLE_MS    = 800  # ms to wait after each LED turns on before capturing
+NUM_LEDS         = 5    # number of Arduino-controlled LEDs
+LED_FLUSH_FRAMES = 2    # cap.grab() count before retrieve to flush stale frames
+
+
 class CameraController(QtWidgets.QWidget):
     # Signal to update the UI from the printer thread safely
     update_image_signal = QtCore.pyqtSignal(object)
@@ -73,15 +79,23 @@ class CameraController(QtWidgets.QWidget):
     def __init__(self):
         super().__init__()
         self.setWindowTitle("Oasis Camera View")
-        self.resize(600, 450)
+        self.resize(600, 550)
 
         # Default Settings
         self.camera_port = 0
-        self.pause_time = 2.0  # Total time to pause for photo (seconds)
+        self.pause_time = 0.0  # Total time to pause for photo (seconds)
         self.output_dir = os.path.join(os.getcwd(), "timelapse_output")
         self.camera_enabled = True
         self.exposure_value = EXPOSURE_VALUE  # log2(s), controlled by UI spinbox
         self._camera_list = []  # list of {"index": int, "name": str}
+
+        # Arduino LED controller state
+        self._arduino_conn   = None
+        self._arduino_lock   = threading.Lock()
+        self._arduino_port   = None   # str, e.g. "COM5"
+        self.led_enabled     = False  # True when Arduino is connected
+        self.capture_width   = 3840
+        self.capture_height  = 2160
 
         # Ensure output directory exists
         if not os.path.exists(self.output_dir):
@@ -153,6 +167,38 @@ class CameraController(QtWidgets.QWidget):
         self.exposure_spin.valueChanged.connect(lambda v: setattr(self, "exposure_value", v))
         form_layout.addRow("Exposure:", self.exposure_spin)
 
+        # Capture resolution combo
+        self.resolution_combo = QtWidgets.QComboBox()
+        self._resolutions = [
+            ("3840 x 2160 (4K)", 3840, 2160),
+            ("1920 x 1080 (FHD)", 1920, 1080),
+            ("1280 x 720 (HD)", 1280, 720),
+        ]
+        for label, w, h in self._resolutions:
+            self.resolution_combo.addItem(label, (w, h))
+        self.resolution_combo.currentIndexChanged.connect(self._on_resolution_changed)
+        form_layout.addRow("Capture Res:", self.resolution_combo)
+
+        # ── Arduino LED controller port ──────────────────────────────────────
+        arduino_row = QtWidgets.QHBoxLayout()
+        self.arduino_port_combo = QtWidgets.QComboBox()
+        self.arduino_port_combo.setSizePolicy(QtWidgets.QSizePolicy.Expanding, QtWidgets.QSizePolicy.Fixed)
+        self.arduino_port_combo.setToolTip("Serial port for Arduino LED controller")
+        self._populate_serial_ports()  # fill with available COM ports
+
+        self.arduino_connect_btn = QtWidgets.QPushButton("Connect")
+        self.arduino_connect_btn.setFixedWidth(70)
+        self.arduino_connect_btn.clicked.connect(self._arduino_connect_clicked)
+
+        self.arduino_status_lbl = QtWidgets.QLabel("Disconnected")
+        self.arduino_status_lbl.setStyleSheet("color: grey;")
+
+        arduino_row.addWidget(self.arduino_port_combo)
+        arduino_row.addWidget(self.arduino_connect_btn)
+        form_layout.addRow("LED Controller:", arduino_row)
+        form_layout.addRow("", self.arduino_status_lbl)
+        # ────────────────────────────────────────────────────────────────────
+
         # CALIB HOOK — calibration status + run button
         self.calib_status_label = QtWidgets.QLabel("● Unknown")
         self.calib_status_label.setStyleSheet("color: grey;")
@@ -170,6 +216,64 @@ class CameraController(QtWidgets.QWidget):
 
         # Connect the signal to the UI update slot
         self.update_image_signal.connect(self.update_display_slot)
+
+    # --- Serial port enumeration (for Arduino combo) ---
+    def _populate_serial_ports(self):
+        import glob as _glob
+        self.arduino_port_combo.clear()
+        if sys.platform.startswith("win"):
+            ports = ["COM%s" % (i + 1) for i in range(256)]
+        elif sys.platform.startswith("linux") or sys.platform.startswith("cygwin"):
+            ports = _glob.glob("/dev/tty[A-Za-z]*")
+        else:
+            ports = _glob.glob("/dev/tty.*")
+        result = []
+        for p in ports:
+            try:
+                s = serial.Serial(p)
+                s.close()
+                result.append(p)
+            except (OSError, serial.SerialException):
+                pass
+        self.arduino_port_combo.addItems(result if result else ["(none)"])
+
+    def _arduino_connect_clicked(self):
+        port = self.arduino_port_combo.currentText()
+        if port == "(none)" or not port:
+            return
+        threading.Thread(target=self._arduino_connect, args=(port,), daemon=True).start()
+
+    def _arduino_connect(self, port: str):
+        try:
+            conn = serial.Serial(port, 9600, timeout=1)
+            time.sleep(2.0)
+            conn.reset_input_buffer()
+            with self._arduino_lock:
+                if self._arduino_conn and self._arduino_conn.is_open:
+                    self._arduino_conn.close()
+                self._arduino_conn = conn
+                self._arduino_port = port
+            self.led_enabled = True
+            self.arduino_status_lbl.setText(f"OK: {port}")
+            self.arduino_status_lbl.setStyleSheet("color: green; font-weight: bold;")
+            print(f"[Arduino] Connected on {port}")
+        except Exception as exc:
+            self.led_enabled = False
+            self.arduino_status_lbl.setText(f"Error: {exc}")
+            self.arduino_status_lbl.setStyleSheet("color: red;")
+            print(f"[Arduino] Connect failed: {exc}")
+
+    def _led_send(self, cmd: str):
+        with self._arduino_lock:
+            if self._arduino_conn and self._arduino_conn.is_open:
+                self._arduino_conn.write(cmd.encode())
+
+    def _led_on(self, n: int):
+        """Turn on LED n (1-indexed)."""
+        self._led_send(str(n))
+
+    def _led_all_off(self):
+        self._led_send("0")
 
     # --- Camera enumeration ---
     def _populate_cameras(self):
@@ -202,6 +306,11 @@ class CameraController(QtWidgets.QWidget):
         # CALIB HOOK — refresh calibration status whenever a camera is selected
         self._update_calib_status()
 
+    def _on_resolution_changed(self, idx):
+        data = self.resolution_combo.itemData(idx)
+        if data:
+            self.capture_width, self.capture_height = data
+
     # --- Setters ---
     def set_enabled(self, val):
         self.camera_enabled = val
@@ -233,84 +342,96 @@ class CameraController(QtWidgets.QWidget):
             self.calib_status_label.setStyleSheet("color: red; font-weight: bold;")
 
     # --- Capture Logic (Called from Print Thread) ---
-    def capture_sync(self, filename_suffix):
-        """
-        Full-resolution capture with UVC lock, frame averaging, and unsharp mask.
-        Blocking call safe for use in the printing thread.
+
+    def _open_camera(self, cv2):
+        """카메라를 열고 설정을 한 번만 적용 후 반환. 실패 시 None."""
+        cap = cv2.VideoCapture(self.camera_port, BACKEND)
+        if not cap.isOpened():
+            return None
+
+        # 설정은 카메라 오픈 직후 한 번만 — LED loop 에서 반복하면 DSHOW 지연 발생
+        cap.set(cv2.CAP_PROP_FOURCC, cv2.VideoWriter_fourcc(*"MJPG"))
+        cap.set(cv2.CAP_PROP_FRAME_WIDTH,  self.capture_width)
+        cap.set(cv2.CAP_PROP_FRAME_HEIGHT, self.capture_height)
+        cap.set(cv2.CAP_PROP_AUTO_EXPOSURE, AUTO_EXPOSURE_MANUAL)
+        cap.set(cv2.CAP_PROP_EXPOSURE,      self.exposure_value)
+        cap.set(cv2.CAP_PROP_GAIN,          GAIN_VALUE)
+        cap.set(cv2.CAP_PROP_AUTO_WB,       AUTO_WB)
+        # FPS는 최대로 — 1로 고정하면 LED당 1초 강제 대기 발생
+        cap.set(cv2.CAP_PROP_FPS, 30)
+
+        # warm-up: 설정 적용 후 버퍼 flush
+        for _ in range(WARMUP_FRAMES):
+            cap.read()
+
+        return cap
+
+    def _grab_frame(self, cap, cv2):
+        """grab×LED_FLUSH_FRAMES 로 버퍼 flush 후 retrieve."""
+        for _ in range(LED_FLUSH_FRAMES):
+            cap.grab()
+        ret, f = cap.retrieve()
+        if not ret or f is None:
+            return None
+
+        frame = f
+        if UNSHARP_AMOUNT > 0:
+            blurred = cv2.GaussianBlur(frame, (0, 0), UNSHARP_SIGMA)
+            frame = cv2.addWeighted(frame, 1 + UNSHARP_AMOUNT,
+                                    blurred, -UNSHARP_AMOUNT, 0)
+        return frame
+
+    def capture_led_sequence(self, filename_stem: str):
+        """LED 1~5 를 순서대로 켜고, 각 LED 마다 카메라 캡처 후 저장.
+
+        파일명: <filename_stem>_led1.png … <filename_stem>_led5.png
+        Arduino 미연결 시 LED 없이 단일 캡처(noLED.png)로 fallback.
+        카메라 설정은 오픈 시 한 번만 적용 — LED 전환 사이 딜레이 없음.
+        Blocking — 프린트 스레드에서 직접 호출.
         """
         if not self.camera_enabled:
             return
 
         import cv2
-        import numpy as np
-
-        print(f"CAMERA: Initiating capture for {filename_suffix}")
-
-        time.sleep(self.pause_time / 2.0)
 
         try:
-            cap = cv2.VideoCapture(self.camera_port, BACKEND)
-            if not cap.isOpened():
+            cap = self._open_camera(cv2)
+            if cap is None:
                 print(f"CAMERA: Could not open port {self.camera_port}")
-                time.sleep(self.pause_time / 2.0)
                 return
 
-            # 1. MJPEG + maximum resolution
-            cap.set(cv2.CAP_PROP_FOURCC, cv2.VideoWriter_fourcc(*"MJPG"))
-            cap.set(cv2.CAP_PROP_FRAME_WIDTH,  3840)   # 또는 2560
-            cap.set(cv2.CAP_PROP_FRAME_HEIGHT, 2160)   # 또는 1440
-            cap.set(cv2.CAP_PROP_FPS, 15)              # 해상도 높으면 fps 낮춰 대역폭 확보
+            led_indices = range(1, NUM_LEDS + 1) if self.led_enabled else [0]
 
-            # 2. Manual lock: exposure and gain
-            cap.set(cv2.CAP_PROP_AUTO_EXPOSURE, AUTO_EXPOSURE_MANUAL)
-            cap.set(cv2.CAP_PROP_EXPOSURE,      self.exposure_value)
-            cap.set(cv2.CAP_PROP_GAIN,          GAIN_VALUE)
-            cap.set(cv2.CAP_PROP_AUTO_WB,       AUTO_WB)
+            for led_n in led_indices:
+                if led_n > 0:
+                    self._led_on(led_n)
+                time.sleep(LED_SETTLE_MS / 1000.0)
 
-            # 3. Lock FPS to 1 (preserve USB 2.0 bandwidth)
-            cap.set(cv2.CAP_PROP_FPS, 1)
+                frame = self._grab_frame(cap, cv2)
 
-            # 4. Discard warm-up frames
-            for _ in range(WARMUP_FRAMES):
-                cap.read()
+                if frame is None:
+                    print(f"CAMERA: Failed to read frame (LED {led_n}).")
+                    continue
 
-            # 5. Frame averaging
-            frames = []
-            for _ in range(max(1, AVERAGING_FRAMES)):
-                ret, f = cap.read()
-                if ret:
-                    frames.append(f.astype(np.float32))
+                tag = f"led{led_n}" if led_n > 0 else "noLED"
+                filepath = os.path.join(self.output_dir, f"{filename_stem}_{tag}.png")
+                cv2.imwrite(filepath, frame)
+                h, w = frame.shape[:2]
+                print(f"CAMERA: Saved {filepath}  ({w}x{h})")
+
+                frame_rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
+                self.update_image_signal.emit(frame_rgb)
+
+            self._led_all_off()
             cap.release()
-
-            if not frames:
-                print("CAMERA: Failed to read frames.")
-                time.sleep(self.pause_time / 2.0)
-                return
-
-            frame = np.mean(frames, axis=0).astype(np.uint8)
-
-            # 6. Unsharp mask
-            if UNSHARP_AMOUNT > 0:
-                blurred = cv2.GaussianBlur(frame, (0, 0), UNSHARP_SIGMA)
-                frame = cv2.addWeighted(frame, 1 + UNSHARP_AMOUNT,
-                                        blurred, -UNSHARP_AMOUNT, 0)
-
-            # 7. Save (PNG)
-            actual_w = int(frames[0].shape[1]) if frames else 0
-            actual_h = int(frames[0].shape[0]) if frames else 0
-            filename = f"{filename_suffix}.png"
-            filepath = os.path.join(self.output_dir, filename)
-            cv2.imwrite(filepath, frame)
-            print(f"CAMERA: Saved {filepath}  ({actual_w}x{actual_h}, avg={len(frames)})")
-
-            # 8. Update UI
-            frame_rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
-            self.update_image_signal.emit(frame_rgb)
 
         except Exception as e:
             print(f"CAMERA ERROR: {e}")
+            self._led_all_off()
 
-        time.sleep(self.pause_time / 2.0)
+    def capture_sync(self, filename_suffix):
+        """Compatibility shim — delegates to capture_led_sequence."""
+        self.capture_led_sequence(filename_suffix)
 
     # --- UI Update (Runs on Main Thread) ---
     @QtCore.pyqtSlot(object)
@@ -573,6 +694,11 @@ class MainWindow(QtWidgets.QMainWindow):
 
         self.form.inkjet_set_port.clear()
         self.form.inkjet_set_port.addItems(result)
+
+        # update Arduino LED controller port list
+        if hasattr(self, "camera_window"):
+            self.camera_window.arduino_port_combo.clear()
+            self.camera_window.arduino_port_combo.addItems(result if result else ["(none)"])
 
     def _EmergencyUnlock(self):
         """Clear GRBL alarm lock without homing — jog becomes available immediately.
@@ -1214,7 +1340,7 @@ class MainWindow(QtWidgets.QMainWindow):
         """Extract the current layer from the loaded SVG and save as a single-layer SVG."""
         captures_dir = self.camera_window.output_dir
         svg_path = self.imageconverter.file_path
-        layer_name = self.imageconverter.svg_layer_names[layer_idx]
+        layer_name = self.imageconverter.svg_layer_names[layer_idx - 1]
 
         in_layer = False
         layer_lines = []
