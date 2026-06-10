@@ -1,0 +1,60 @@
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600;700&display=swap');
+@import "tailwindcss";
+
+@theme {
+  --font-sans: "Inter", system-ui, sans-serif;
+  --font-mono: "JetBrains Mono", monospace;
+  
+  --color-primary-blue: #2563eb;
+  --color-primary-blue-hover: #1d4ed8;
+  --color-emergency-red: #dc2626;
+  --color-emergency-red-hover: #b91c1c;
+  --color-bg-gray: #f3f4f6;
+}
+
+body {
+  font-family: var(--font-sans);
+  background-color: var(--color-bg-gray);
+  color: #111827;
+  overflow: hidden;
+  margin: 0;
+  padding: 0;
+}
+
+/* Custom Scrollbar styled nicely for HMI */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+::-webkit-scrollbar-thumb {
+  background: #cbd5e1;
+  border-radius: 3px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: #94a3b8;
+}
+
+/* Hatching pattern warning zone for Emergency stop etc. */
+.bg-safety-hatch {
+  background: repeating-linear-gradient(
+    45deg,
+    #dc2626,
+    #dc2626 10px,
+    #991b1b 10px,
+    #991b1b 20px
+  );
+}
+
+.bg-safety-hatch-light {
+  background: repeating-linear-gradient(
+    45deg,
+    #e5e7eb,
+    #e5e7eb 10px,
+    #f3f4f6 10px,
+    #f3f4f6 20px
+  );
+}
+

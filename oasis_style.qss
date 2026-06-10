@@ -1,0 +1,200 @@
+/* ====================================================================
+   밝고 현대적인 3D 프린터 콘솔 전용 QSS (Bright Slate & Blue Theme)
+   ==================================================================== */
+
+/* 전체 글로벌 기본 배경 및 폰트 */
+QWidget {
+    background-color: #f8fafc;
+    color: #1e293b;
+    font-family: "Inter", "Segoe UI", sans-serif;
+    font-size: 32px;
+}
+
+/* 개별 패널 카드 */
+QGroupBox {
+    background-color: #ffffff;
+    border: 3px solid #e2e8f0;
+    border-radius: 10px;
+    margin-top: 22px;
+    padding-top: 20px;
+    font-weight: bold;
+    text-transform: uppercase;
+}
+
+QGroupBox::title {
+    subcontrol-origin: margin;
+    subcontrol-position: top left;
+    left: 12px;
+    padding: 2px 8px;
+    background-color: #e2e8f0;
+    color: #0f172a;
+    border-radius: 6px;
+}
+
+/* Slicer/Printbed 윈도우 */
+#input_window, #output_window {
+    background-color: #ffffff;
+    border: 3px solid #cbd5e1;
+    border-radius: 10px;
+}
+
+/* 일반 입력 위젯 */
+QLineEdit, QComboBox, QSpinBox {
+    background-color: #ffffff;
+    border: 3px solid #cbd5e1;
+    border-radius: 6px;
+    padding: 14px 22px;
+    color: #0f172a;
+}
+
+QLineEdit:focus, QComboBox:focus, QSpinBox:focus {
+    border: 3px solid #2563eb;
+}
+
+QLineEdit:read-only {
+    background-color: #f1f5f9;
+    color: #64748b;
+}
+
+/* 슬라이더 */
+QSlider::groove:horizontal {
+    height: 6px;
+    background: #e2e8f0;
+    border-radius: 3px;
+}
+
+QSlider::handle:horizontal {
+    background: #2563eb;
+    border: none;
+    width: 22px;
+    height: 22px;
+    margin: -8px 0;
+    border-radius: 11px;
+}
+
+QSlider::sub-page:horizontal {
+    background: #2563eb;
+    border-radius: 3px;
+}
+
+/* 기본 버튼 */
+QPushButton {
+    background-color: #f1f5f9;
+    border: 3px solid #cbd5e1;
+    border-radius: 6px;
+    padding: 14px 22px;
+    font-weight: bold;
+    color: #334155;
+}
+
+QPushButton:hover {
+    background-color: #e2e8f0;
+    border-color: #94a3b8;
+}
+
+QPushButton:pressed {
+    background-color: #cbd5e1;
+}
+
+QPushButton:disabled {
+    background-color: #f8fafc;
+    color: #94a3b8;
+    border-color: #e2e8f0;
+}
+
+/* Connect 버튼 — 연결 시 초록, 미연결 시 기본 */
+QPushButton#motion_connect[connected="true"],
+QPushButton#inkjet_connect[connected="true"] {
+    background-color: #16a34a;
+    border-color: #15803d;
+    color: #ffffff;
+}
+
+/* Print 버튼 — 파란 accent */
+QPushButton#file_print_button {
+    background-color: #2563eb;
+    border: none;
+    border-radius: 4px;
+    color: #ffffff;
+    font-weight: bold;
+}
+
+QPushButton#file_print_button:hover {
+    background-color: #1d4ed8;
+}
+
+QPushButton#file_print_button:disabled {
+    background-color: #94a3b8;
+    color: #e2e8f0;
+}
+
+/* Abort 버튼 — 빨간 accent */
+QPushButton#abort_button {
+    background-color: #dc2626;
+    border: none;
+    border-radius: 4px;
+    color: #ffffff;
+    font-weight: bold;
+}
+
+QPushButton#abort_button:hover {
+    background-color: #b91c1c;
+}
+
+/* HeadClean 버튼 — 주황 accent */
+QPushButton#inkjet_head_clean {
+    background-color: #ea580c;
+    border: none;
+    border-radius: 4px;
+    color: #ffffff;
+    font-weight: bold;
+}
+
+QPushButton#inkjet_head_clean:hover {
+    background-color: #c2410c;
+}
+
+/* Status Bar */
+QStatusBar {
+    background-color: #0f172a;
+    color: #94a3b8;
+    font-family: "Consolas", "Courier New", monospace;
+    font-size: 14px;
+    border-top: 2px solid #1e293b;
+}
+
+QStatusBar QLabel {
+    background-color: transparent;
+    color: #94a3b8;
+    padding: 0 6px;
+}
+
+/* ComboBox 드롭다운 */
+QComboBox::drop-down {
+    border: none;
+    width: 20px;
+}
+
+QComboBox::down-arrow {
+    width: 10px;
+    height: 10px;
+}
+
+QComboBox QAbstractItemView {
+    background-color: #ffffff;
+    border: 2px solid #cbd5e1;
+    selection-background-color: #2563eb;
+    selection-color: #ffffff;
+    outline: none;
+}
+
+/* SpinBox 버튼 */
+QSpinBox::up-button, QSpinBox::down-button {
+    background-color: #e2e8f0;
+    border: none;
+    width: 28px;
+}
+
+QSpinBox::up-button:hover, QSpinBox::down-button:hover {
+    background-color: #cbd5e1;
+}
