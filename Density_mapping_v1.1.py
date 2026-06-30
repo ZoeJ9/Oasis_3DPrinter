@@ -100,28 +100,22 @@ class CameraController(QtWidgets.QWidget):
         if not os.path.exists(self.output_dir):
             os.makedirs(self.output_dir)
 
-        # --- UI Layout: 9/3 split (feed+acquisition | settings) ---
-        root_layout = QtWidgets.QHBoxLayout()
+        # --- UI Layout: single vertical column ---
+        root_layout = QtWidgets.QVBoxLayout()
         root_layout.setContentsMargins(8, 8, 8, 8)
-        root_layout.setSpacing(8)
+        root_layout.setSpacing(6)
 
-        # ── LEFT (9/12): camera feed + acquisition controls ──────────────────
-        left_widget = QtWidgets.QWidget()
-        left_layout = QtWidgets.QVBoxLayout(left_widget)
-        left_layout.setContentsMargins(0, 0, 0, 0)
-        left_layout.setSpacing(6)
-
-        # Camera feed
-        feed_group = QtWidgets.QGroupBox("Live Feed")
+        # ── Camera feed ───────────────────────────────────────────────────────
+        feed_group = QtWidgets.QGroupBox("Camera Feed")
         feed_layout = QtWidgets.QVBoxLayout(feed_group)
         self.image_label = QLabel("No Image Captured")
         self.image_label.setAlignment(QtCore.Qt.AlignCenter)
         self.image_label.setMinimumSize(480, 360)
         self.image_label.setStyleSheet("border: 2px solid #cbd5e1; border-radius: 6px; background-color: #0f172a; color: #94a3b8;")
         feed_layout.addWidget(self.image_label)
-        left_layout.addWidget(feed_group, stretch=1)
+        root_layout.addWidget(feed_group, stretch=1)
 
-        # Acquisition controls
+        # ── Acquisition ───────────────────────────────────────────────────────
         acq_group = QtWidgets.QGroupBox("Acquisition")
         acq_layout = QtWidgets.QGridLayout(acq_group)
         acq_layout.setSpacing(6)
@@ -155,21 +149,14 @@ class CameraController(QtWidgets.QWidget):
         self.preview_btn.clicked.connect(self._preview_capture)
         acq_layout.addWidget(self.preview_btn, 3, 0, 1, 2)
 
-        left_layout.addWidget(acq_group)
-        root_layout.addWidget(left_widget, stretch=3)
+        root_layout.addWidget(acq_group)
 
-        # ── RIGHT (3/12): settings panel ─────────────────────────────────────
-        right_widget = QtWidgets.QWidget()
-        right_layout = QtWidgets.QVBoxLayout(right_widget)
-        right_layout.setContentsMargins(0, 0, 0, 0)
-        right_layout.setSpacing(6)
-
+        # ── Settings ──────────────────────────────────────────────────────────
         settings_group = QtWidgets.QGroupBox("Settings")
         form_layout = QtWidgets.QFormLayout(settings_group)
         form_layout.setFieldGrowthPolicy(QtWidgets.QFormLayout.ExpandingFieldsGrow)
         form_layout.setSpacing(8)
 
-        # Camera selection
         cam_row = QtWidgets.QHBoxLayout()
         self.port_combo = QtWidgets.QComboBox()
         self.port_combo.setSizePolicy(QtWidgets.QSizePolicy.Expanding, QtWidgets.QSizePolicy.Fixed)
@@ -183,7 +170,6 @@ class CameraController(QtWidgets.QWidget):
         form_layout.addRow("Camera:", cam_row)
         self._populate_cameras()
 
-        # Exposure
         self.exposure_spin = QtWidgets.QSpinBox()
         self.exposure_spin.setRange(-7, -1)
         self.exposure_spin.setValue(self.exposure_value)
@@ -192,7 +178,6 @@ class CameraController(QtWidgets.QWidget):
         self.exposure_spin.valueChanged.connect(lambda v: setattr(self, "exposure_value", v))
         form_layout.addRow("Exposure:", self.exposure_spin)
 
-        # Capture resolution
         self.resolution_combo = QtWidgets.QComboBox()
         self._resolutions = [
             ("3840 x 2160 (4K)", 3840, 2160),
@@ -204,7 +189,6 @@ class CameraController(QtWidgets.QWidget):
         self.resolution_combo.currentIndexChanged.connect(self._on_resolution_changed)
         form_layout.addRow("Capture Res:", self.resolution_combo)
 
-        # Arduino LED controller
         arduino_row = QtWidgets.QHBoxLayout()
         self.arduino_port_combo = QtWidgets.QComboBox()
         self.arduino_port_combo.setSizePolicy(QtWidgets.QSizePolicy.Expanding, QtWidgets.QSizePolicy.Fixed)
@@ -220,16 +204,13 @@ class CameraController(QtWidgets.QWidget):
         self.arduino_status_lbl.setStyleSheet("color: grey;")
         form_layout.addRow("", self.arduino_status_lbl)
 
-        # Calibration
         self.calib_status_label = QtWidgets.QLabel("● Unknown")
         self.calib_status_label.setStyleSheet("color: grey;")
         form_layout.addRow("Calibration:", self.calib_status_label)
         self.btn_run_calibration = QtWidgets.QPushButton("Run Calibration")
         form_layout.addRow("", self.btn_run_calibration)
 
-        right_layout.addWidget(settings_group)
-        right_layout.addStretch()
-        root_layout.addWidget(right_widget, stretch=1)
+        root_layout.addWidget(settings_group)
 
         self.setLayout(root_layout)
 
