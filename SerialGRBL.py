@@ -173,11 +173,14 @@ class GRBL(serial.Serial):
                 if (read_line.startswith('error')): #if error was found,
                     self.window_input_buffer += str(read_line) #add to the window buffer
                     self.error_state = 1
-                    print("error found, getting error type")
+                    print("GRBL ERROR: " + read_line)
                 if (read_line.startswith('[')): #if message was found,
                     self.window_input_buffer += str(read_line) #add to the window buffer
-                    print("message found, getting message")
+                    print("GRBL MSG: " + read_line)
                     #self.Home()
+                if (read_line.startswith('alarm')): #if alarm was found,
+                    self.window_input_buffer += str(read_line) #add to the window buffer
+                    print("GRBL ALARM: " + read_line)
                 if (read_line.startswith('<')): #if status was found,
                     #print("status found, getting status")
                     read_line = read_line.partition(',')#partition till |, compare options
