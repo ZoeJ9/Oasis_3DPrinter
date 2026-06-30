@@ -74,6 +74,8 @@ LED_FLUSH_FRAMES = 2    # cap.grab() count before retrieve to flush stale frames
 class CameraController(QtWidgets.QWidget):
     # Signal to update the UI from the printer thread safely
     update_image_signal = QtCore.pyqtSignal(object)
+    # Signal to reset the preview button from a background thread safely
+    _preview_done_signal = QtCore.pyqtSignal()
 
     def __init__(self):
         super().__init__()
@@ -87,6 +89,7 @@ class CameraController(QtWidgets.QWidget):
         self.camera_enabled = True
         self.exposure_value = EXPOSURE_VALUE  # log2(s), controlled by UI spinbox
         self._camera_list = []  # list of {"index": int, "name": str}
+        self._last_frame_rgb = None  # most recent captured frame, for the zoom view
 
         # Arduino LED controller state
         self._arduino_conn   = None
@@ -112,6 +115,9 @@ class CameraController(QtWidgets.QWidget):
         self.image_label.setAlignment(QtCore.Qt.AlignCenter)
         self.image_label.setMinimumSize(480, 360)
         self.image_label.setStyleSheet("border: 2px solid #cbd5e1; border-radius: 6px; background-color: #0f172a; color: #94a3b8;")
+        self.image_label.setCursor(QtCore.Qt.PointingHandCursor)
+        self.image_label.setToolTip("Click to view full size")
+        self.image_label.mousePressEvent = self._open_zoom_view
         feed_layout.addWidget(self.image_label)
         root_layout.addWidget(feed_group, stretch=1)
 
@@ -216,6 +222,7 @@ class CameraController(QtWidgets.QWidget):
 
         # Connect the signal to the UI update slot
         self.update_image_signal.connect(self.update_display_slot)
+        self._preview_done_signal.connect(self._reset_preview_button)
 
     # --- Serial port enumeration (for Arduino combo) ---
     def _populate_serial_ports(self):
@@ -461,20 +468,21 @@ class CameraController(QtWidgets.QWidget):
         except Exception as e:
             print(f"PREVIEW ERROR: {e}")
         finally:
-            QtCore.QMetaObject.invokeMethod(
-                self.preview_btn, "setText",
-                QtCore.Qt.QueuedConnection,
-                QtCore.Q_ARG(str, "Preview")
-            )
-            QtCore.QMetaObject.invokeMethod(
-                self.preview_btn, "setEnabled",
-                QtCore.Qt.QueuedConnection,
-                QtCore.Q_ARG(bool, True)
-            )
+            # Qt widgets must only be touched on the main thread — emit a
+            # signal instead of QMetaObject.invokeMethod, whose Q_ARG(str, ...)
+            # marshalling for setText/setEnabled raises RuntimeError on some
+            # PyQt5 builds and previously left the button stuck disabled.
+            self._preview_done_signal.emit()
+
+    @QtCore.pyqtSlot()
+    def _reset_preview_button(self):
+        self.preview_btn.setText("Preview")
+        self.preview_btn.setEnabled(True)
 
     # --- UI Update (Runs on Main Thread) ---
     @QtCore.pyqtSlot(object)
     def update_display_slot(self, frame_rgb):
+        self._last_frame_rgb = frame_rgb
         h, w, ch = frame_rgb.shape
         bytes_per_line = ch * w
         # Create QImage from data
@@ -487,6 +495,32 @@ class CameraController(QtWidgets.QWidget):
             QtCore.Qt.SmoothTransformation,
         )
         self.image_label.setPixmap(scaled)
+
+    def _open_zoom_view(self, event):
+        """Show the most recent captured frame full-size in a separate dialog."""
+        if self._last_frame_rgb is None:
+            return
+        frame_rgb = self._last_frame_rgb
+        h, w, ch = frame_rgb.shape
+        bytes_per_line = ch * w
+        q_img = QImage(frame_rgb.data, w, h, bytes_per_line, QImage.Format_RGB888)
+        pixmap = QPixmap.fromImage(q_img)
+
+        dialog = QtWidgets.QDialog(self)
+        dialog.setWindowTitle("Camera Capture — Full Size")
+        screen = QtWidgets.QApplication.primaryScreen().availableGeometry()
+        max_w, max_h = int(screen.width() * 0.9), int(screen.height() * 0.9)
+        layout = QtWidgets.QVBoxLayout(dialog)
+        scroll = QtWidgets.QScrollArea()
+        scroll.setWidgetResizable(True)
+        zoom_label = QLabel()
+        if pixmap.width() > max_w or pixmap.height() > max_h:
+            pixmap = pixmap.scaled(max_w, max_h, QtCore.Qt.KeepAspectRatio, QtCore.Qt.SmoothTransformation)
+        zoom_label.setPixmap(pixmap)
+        scroll.setWidget(zoom_label)
+        layout.addWidget(scroll)
+        dialog.resize(min(pixmap.width() + 40, max_w), min(pixmap.height() + 40, max_h))
+        dialog.exec_()
 
 
 # -----------------------------------------------
@@ -2806,6 +2840,11 @@ if __name__ == "__main__":
         )
 
     sys.excepthook = excepthook
+
+    # Disable Qt's automatic OS DPI scaling so QSS px values (oasis_style.qss)
+    # render the same physical size on every laptop, regardless of its
+    # Windows display scale (100%/125%/150%/...).
+    QtWidgets.QApplication.setAttribute(QtCore.Qt.AA_DisableHighDpiScaling, True)
 
     app = QtWidgets.QApplication(sys.argv)
     gui = MainWindow()
