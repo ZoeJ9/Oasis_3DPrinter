@@ -157,6 +157,11 @@ class CameraController(QtWidgets.QWidget):
         self.preview_btn.clicked.connect(self._preview_capture)
         acq_layout.addWidget(self.preview_btn, 3, 0, 1, 2)
 
+        self.save_preview_btn = QtWidgets.QPushButton("Save Preview")
+        self.save_preview_btn.setToolTip("Save the last captured/previewed frame to a file")
+        self.save_preview_btn.clicked.connect(self._save_preview)
+        acq_layout.addWidget(self.save_preview_btn, 4, 0, 1, 2)
+
         root_layout.addWidget(acq_group)
 
         # ── Settings ──────────────────────────────────────────────────────────
@@ -480,6 +485,26 @@ class CameraController(QtWidgets.QWidget):
     def _reset_preview_button(self):
         self.preview_btn.setText("Preview")
         self.preview_btn.setEnabled(True)
+
+    def _save_preview(self):
+        """Save the most recently captured/previewed frame to a file the user picks."""
+        if self._last_frame_rgb is None:
+            QtWidgets.QMessageBox.information(
+                self, "No Image", "No preview or capture has been taken yet."
+            )
+            return
+
+        default_name = os.path.join(self.output_dir, "preview.png")
+        filepath, _ = QFileDialog.getSaveFileName(
+            self, "Save Preview", default_name, "PNG image (*.png);;JPEG image (*.jpg)"
+        )
+        if not filepath:
+            return
+
+        import cv2
+        frame_bgr = cv2.cvtColor(self._last_frame_rgb, cv2.COLOR_RGB2BGR)
+        cv2.imwrite(filepath, frame_bgr)
+        print(f"CAMERA: Saved preview to {filepath}")
 
     # --- UI Update (Runs on Main Thread) ---
     @QtCore.pyqtSlot(object)
