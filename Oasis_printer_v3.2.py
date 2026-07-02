@@ -29,6 +29,8 @@ from SerialHP45 import HP45
 import os
 from ImageConverter import ImageConverter
 import B64
+_builtin_min = min  # preserved before `from numpy import *` shadows it below
+_builtin_max = max
 from numpy import *
 import math
 import threading
@@ -404,7 +406,7 @@ class CameraController(QtWidgets.QWidget):
         zoom_label.setPixmap(pixmap)
         scroll.setWidget(zoom_label)
         layout.addWidget(scroll)
-        dialog.resize(min(pixmap.width() + 40, max_w), min(pixmap.height() + 40, max_h))
+        dialog.resize(_builtin_min(pixmap.width() + 40, max_w), _builtin_min(pixmap.height() + 40, max_h))
         dialog.exec_()
 
 
@@ -1692,7 +1694,7 @@ class MainWindow(QtWidgets.QMainWindow):
         self.layers         = self.imageconverter.svg_layers
         self.svg_offset_y   = self.imageconverter.svg_height / 2
         self.svg_offset_x   = self.imageconverter.svg_width  / 2
-        start_layer = max(1, min(self.form.start_layer_spinbox.value(), self.layers))
+        start_layer = _builtin_max(1, _builtin_min(self.form.start_layer_spinbox.value(), self.layers))
         self.current_layer        = start_layer
         self.current_layer_height = self.imageconverter.svg_layer_height[start_layer - 1]
         self.printing_abort_flag  = 0
