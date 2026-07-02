@@ -217,6 +217,22 @@ class CameraController(QtWidgets.QWidget):
         self.arduino_status_lbl.setStyleSheet("color: grey;")
         form_layout.addRow("", self.arduino_status_lbl)
 
+        led_test_row = QtWidgets.QHBoxLayout()
+        self.led_test_buttons = []
+        for n in range(1, NUM_LEDS + 1):
+            btn = QtWidgets.QPushButton(str(n))
+            btn.setCheckable(True)
+            btn.setFixedWidth(28)
+            btn.setToolTip(f"Turn on LED {n} only")
+            btn.clicked.connect(lambda _checked, n=n: self._led_test_on(n))
+            led_test_row.addWidget(btn)
+            self.led_test_buttons.append(btn)
+        self.led_test_off_btn = QtWidgets.QPushButton("Off")
+        self.led_test_off_btn.setToolTip("Turn all LEDs off")
+        self.led_test_off_btn.clicked.connect(self._led_test_off)
+        led_test_row.addWidget(self.led_test_off_btn)
+        form_layout.addRow("Test LEDs:", led_test_row)
+
         self.calib_status_label = QtWidgets.QLabel("● Unknown")
         self.calib_status_label.setStyleSheet("color: grey;")
         form_layout.addRow("Calibration:", self.calib_status_label)
@@ -288,6 +304,18 @@ class CameraController(QtWidgets.QWidget):
 
     def _led_all_off(self):
         self._led_send("0")
+
+    # --- Manual LED test buttons (Settings panel) ---
+    def _led_test_on(self, n: int):
+        """Turn on LED n and reflect the exclusive selection in the test buttons."""
+        self._led_on(n)
+        for i, btn in enumerate(self.led_test_buttons, start=1):
+            btn.setChecked(i == n)
+
+    def _led_test_off(self):
+        self._led_all_off()
+        for btn in self.led_test_buttons:
+            btn.setChecked(False)
 
     # --- Camera enumeration ---
     def _populate_cameras(self):
