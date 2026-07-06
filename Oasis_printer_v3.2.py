@@ -44,9 +44,28 @@ import serial
 
 import cv2 as _cv2_global
 from config_runner import ConfigRunner
+from fisheye_apply import FisheyeCorrector
 
 # CAMERA SETTINGS — validated for 175mm bed setup
 # ============================================================
+DISTORTION_PARAMS_PATH = os.path.join(
+    os.path.dirname(__file__), "Camera setting", "undistort_output", "distortion_params.json"
+)
+_fisheye_corrector = None
+
+
+def get_fisheye_corrector():
+    """Lazily load the plumb-line calibrated corrector, shared across all captures.
+
+    Returns None if no calibration has been saved yet, so callers can skip
+    correction instead of crashing on a missing file.
+    """
+    global _fisheye_corrector
+    if _fisheye_corrector is None and os.path.exists(DISTORTION_PARAMS_PATH):
+        _fisheye_corrector = FisheyeCorrector(DISTORTION_PARAMS_PATH)
+    return _fisheye_corrector
+
+
 CAMERA_INDEX          = 0
 BACKEND               = _cv2_global.CAP_DSHOW
 
@@ -316,6 +335,9 @@ class CameraController(QtWidgets.QWidget):
             filename = f"{filename_suffix}.png"
             filepath = os.path.join(self.output_dir, filename)
             frame = cv2.rotate(frame, cv2.ROTATE_90_COUNTERCLOCKWISE)
+            corrector = get_fisheye_corrector()
+            if corrector is not None:
+                frame = corrector.undistort(frame)
             cv2.imwrite(filepath, frame)
             print(f"CAMERA: Saved {filepath}  ({actual_w}x{actual_h}, avg={len(frames)})")
 
@@ -350,6 +372,9 @@ class CameraController(QtWidgets.QWidget):
             cap.release()
             if ret and frame is not None:
                 frame = cv2.rotate(frame, cv2.ROTATE_90_COUNTERCLOCKWISE)
+                corrector = get_fisheye_corrector()
+                if corrector is not None:
+                    frame = corrector.undistort(frame)
                 frame_rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
                 self.update_image_signal.emit(frame_rgb)
         except Exception as e:
