@@ -4,8 +4,15 @@ Run this on the machine where the UI looks broken and send back the printed outp
 Reports: OS-reported DPI/scale, what Qt thinks the scale factor is, and
 whether SetProcessDpiAwareness actually took effect -- so we stop guessing
 at the cause and look at what that machine is actually doing.
+
+Usage:
+    python dpi_diagnose.py        # awareness=1 (system aware, current app behavior)
+    python dpi_diagnose.py 2      # awareness=2 (per-monitor aware, to compare)
 """
 import sys
+
+requested_awareness = int(sys.argv[1]) if len(sys.argv) > 1 else 1
+print(f"Requesting DPI awareness level: {requested_awareness}")
 
 print("=== OS-level DPI (via ctypes, before Qt) ===")
 if sys.platform == "win32":
@@ -19,9 +26,9 @@ if sys.platform == "win32":
         print(f"GetProcessDpiAwareness failed: {e}")
 
     try:
-        ctypes.windll.shcore.SetProcessDpiAwareness(1)
+        ctypes.windll.shcore.SetProcessDpiAwareness(requested_awareness)
         ctypes.windll.shcore.GetProcessDpiAwareness(0, ctypes.byref(awareness))
-        print(f"Process DPI awareness after SetProcessDpiAwareness(1): {awareness.value}")
+        print(f"Process DPI awareness after SetProcessDpiAwareness({requested_awareness}): {awareness.value}")
     except Exception as e:
         print(f"SetProcessDpiAwareness failed: {e}")
 
