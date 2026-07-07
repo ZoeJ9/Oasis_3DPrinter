@@ -2931,6 +2931,16 @@ if __name__ == "__main__":
         except Exception:
             pass
 
+    # Qt's default HighDpiScaleFactorRoundingPolicy rounds non-integer scales
+    # (125% -> 1.25x, 150% -> 1.5x) to the nearest whole number -- on a 125%
+    # display that rounds down to 1.0x, silently disabling scaling entirely,
+    # which is why the UI only ever broke on non-100%/non-250%-ish machines.
+    # PassThrough uses the exact scale instead.
+    if hasattr(QtWidgets.QApplication, "setHighDpiScaleFactorRoundingPolicy"):
+        QtWidgets.QApplication.setHighDpiScaleFactorRoundingPolicy(
+            QtCore.Qt.HighDpiScaleFactorRoundingPolicy.PassThrough
+        )
+
     # Let Qt scale UI elements to the OS display scale (100%/125%/150%/...)
     # so oasis_style.qss px values stay legible instead of overflowing their
     # widgets on high-DPI screens.
