@@ -44,8 +44,26 @@ else:
     print("Not on Windows, skipping ctypes checks.")
 
 print()
+print("=== Qt-related environment variables (can override setAttribute) ===")
+import os
+for var in ("QT_ENABLE_HIGHDPI_SCALING", "QT_AUTO_SCREEN_SCALE_FACTOR",
+            "QT_SCALE_FACTOR", "QT_SCREEN_SCALE_FACTORS", "QT_FONT_DPI",
+            "QT_DEVICE_PIXEL_RATIO", "QT_SCALE_FACTOR_ROUNDING_POLICY"):
+    print(f"{var} = {os.environ.get(var, '<not set>')}")
+
+print()
 print("=== Qt-level DPI (after QApplication is created) ===")
 from PyQt5 import QtCore, QtWidgets, QtGui
+
+print(f"Qt::HighDpiScaleFactorRoundingPolicy available: "
+      f"{hasattr(QtCore.Qt, 'HighDpiScaleFactorRoundingPolicy')}")
+if hasattr(QtWidgets.QApplication, 'setHighDpiScaleFactorRoundingPolicy'):
+    QtWidgets.QApplication.setHighDpiScaleFactorRoundingPolicy(
+        QtCore.Qt.HighDpiScaleFactorRoundingPolicy.PassThrough
+    )
+    print("Set rounding policy to PassThrough (use exact scale, no rounding to nearest int)")
+else:
+    print("setHighDpiScaleFactorRoundingPolicy not available in this Qt build")
 
 QtWidgets.QApplication.setAttribute(QtCore.Qt.AA_EnableHighDpiScaling, True)
 QtWidgets.QApplication.setAttribute(QtCore.Qt.AA_UseHighDpiPixmaps, True)
