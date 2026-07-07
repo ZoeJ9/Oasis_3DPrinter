@@ -2921,6 +2921,16 @@ if __name__ == "__main__":
 
     sys.excepthook = excepthook
 
+    # Without this, an unaware process gets bitmap-stretched by Windows on
+    # scaled displays -- Qt's own HighDpiScaling attributes below can't fix
+    # that because the OS is already handing Qt a blown-up framebuffer.
+    if sys.platform == "win32":
+        try:
+            import ctypes
+            ctypes.windll.shcore.SetProcessDpiAwareness(1)  # system DPI aware
+        except Exception:
+            pass
+
     # Let Qt scale UI elements to the OS display scale (100%/125%/150%/...)
     # so oasis_style.qss px values stay legible instead of overflowing their
     # widgets on high-DPI screens.
