@@ -2921,10 +2921,11 @@ if __name__ == "__main__":
 
     sys.excepthook = excepthook
 
-    # Disable Qt's automatic OS DPI scaling so QSS px values (oasis_style.qss)
-    # render the same physical size on every laptop, regardless of its
-    # Windows display scale (100%/125%/150%/...).
-    QtWidgets.QApplication.setAttribute(QtCore.Qt.AA_DisableHighDpiScaling, True)
+    # Let Qt scale UI elements to the OS display scale (100%/125%/150%/...)
+    # so oasis_style.qss px values stay legible instead of overflowing their
+    # widgets on high-DPI screens.
+    QtWidgets.QApplication.setAttribute(QtCore.Qt.AA_EnableHighDpiScaling, True)
+    QtWidgets.QApplication.setAttribute(QtCore.Qt.AA_UseHighDpiPixmaps, True)
 
     app = QtWidgets.QApplication(sys.argv)
     gui = MainWindow()
