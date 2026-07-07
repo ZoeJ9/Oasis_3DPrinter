@@ -454,11 +454,16 @@ class MainWindow(QtWidgets.QMainWindow):
         self.ui = Window()
         self.form = Form()
         self.form.setupUi(self.ui)
-        self.ui.show()
 
+        # Apply the stylesheet before the first show() -- doing it after lets
+        # Qt paint widgets once at the default font size, then some (buttons
+        # inside group boxes especially) don't fully re-layout on the style
+        # change and show ghosted/doubled text from the stale paint.
         qss_path = os.path.join(script_dir, "oasis_style.qss")
         with open(qss_path, "r", encoding="utf-8") as _f:
             self.ui.setStyleSheet(_f.read())
+
+        self.ui.show()
 
         self.camera_window = CameraController()
 
