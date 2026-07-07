@@ -43,7 +43,7 @@ QLineEdit, QComboBox, QSpinBox {
     background-color: #ffffff;
     border: 3px solid #cbd5e1;
     border-radius: 6px;
-    padding: 14px 22px;
+    padding: 4px 8px;
     color: #0f172a;
 }
 
@@ -82,7 +82,7 @@ QPushButton {
     background-color: #f1f5f9;
     border: 3px solid #cbd5e1;
     border-radius: 6px;
-    padding: 14px 22px;
+    padding: 4px 8px;
     font-weight: bold;
     color: #334155;
 }
