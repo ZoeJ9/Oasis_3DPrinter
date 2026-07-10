@@ -69,7 +69,7 @@ class GRBL(serial.Serial):
         self.nl_feed_speed = 6000.0 #how fast new layer feeds (default 3000)
 
         self.nl_piston_speed = 200.0 #how fast the pistons move
-        self.nl_piston_clearance = 1.5 #0.05 # was 0.25mm how much the pistons lower after a new layer to clear the spreader
+        self.nl_piston_clearance = 0.25 #0.05 # was 0.25mm how much the pistons lower after a new layer to clear the spreader
         #this will stop the layers from smearing when the layer comes back...
         
         self.nl_piston_hysteresis = 0.5 # was 1.00mm how much the piston needs to move down before it can move up
@@ -332,12 +332,12 @@ class GRBL(serial.Serial):
             #calculate piston movements
             if (temp_override_build == 0):
                 print("Normal new layer")
-                temp_b_feed_distance = temp_thickness - self.nl_piston_clearance - self.nl_piston_hysteresis
+                temp_b_feed_distance = temp_thickness+ self.nl_piston_clearance 
             else:
                 print("Only feed")
                 temp_b_feed_distance =  (self.nl_piston_clearance * -1) - self.nl_piston_hysteresis
             temp_f_feed_distance = (temp_thickness * self.nl_piston_overfeed * -1) - self.nl_piston_clearance - self.nl_piston_hysteresis
-            temp_hysteresis_clearance =  self.nl_piston_clearance - self.nl_piston_hysteresis
+            # temp_hysteresis_clearance =  self.nl_piston_clearance - self.nl_piston_hysteresis
             
             #b hysteresis = 1
             #thickness = 0.25
@@ -370,12 +370,12 @@ class GRBL(serial.Serial):
             self.SpreaderSet(1) #start spreader
             self.SerialGotoXY(self.nl_front_pos_x, self.nl_back_pos_y, self.nl_feed_speed) #move gantry to overshoot
             self.SpreaderSet(0) #stop spreader
-            self.SerialWriteBufferRaw("G91") #set motion to relative
-            self.SerialWriteBufferRaw("G1 Z" + str(self.nl_piston_hysteresis) + " F" + str(self.nl_piston_speed)) #move hysteresis down
-            self.SerialWriteBufferRaw("G1 Z" + str(temp_hysteresis_clearance) + " F" + str(self.nl_piston_speed)) #move build pistons down clearance amount
-            self.SerialWriteBufferRaw("G1 A" + str(self.nl_piston_hysteresis) + " F" + str(self.nl_piston_speed)) #move hysteresis down
-            self.SerialWriteBufferRaw("G1 A" + str(temp_hysteresis_clearance) + " F" + str(self.nl_piston_speed)) #move feed pistons down clearance amount
-            self.SerialWriteBufferRaw("G90") #set motion to absolute
+            # self.SerialWriteBufferRaw("G91") #set motion to relative
+            # self.SerialWriteBufferRaw("G1 Z" + str(self.nl_piston_hysteresis) + " F" + str(self.nl_piston_speed)) #move hysteresis down
+            # self.SerialWriteBufferRaw("G1 Z" + str(temp_hysteresis_clearance) + " F" + str(self.nl_piston_speed)) #move build pistons down clearance amount
+            # self.SerialWriteBufferRaw("G1 A" + str(self.nl_piston_hysteresis) + " F" + str(self.nl_piston_speed)) #move hysteresis down
+            # self.SerialWriteBufferRaw("G1 A" + str(temp_hysteresis_clearance) + " F" + str(self.nl_piston_speed)) #move feed pistons down clearance amount
+            # self.SerialWriteBufferRaw("G90") #set motion to absolute
             
             
             #wait till state is not idle anymore

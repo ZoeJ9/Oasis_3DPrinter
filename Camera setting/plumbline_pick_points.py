@@ -5,7 +5,6 @@ Step 1 of plumb-line calibration: click points along known-straight edges
 Why manual clicking instead of edge detection: ruler tick marks and numbers
 create lots of short spurious edges that confuse automatic line detectors.
 Clicking 4-8 points per straight edge is fast and gives clean data for the
-least-squares solve in plumbline_solve.py.
 
 Usage:
     python plumbline_pick_points.py --images preview1.png preview2.png preview3.png preview4.png
