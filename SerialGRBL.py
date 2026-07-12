@@ -323,68 +323,110 @@ class GRBL(serial.Serial):
             self.spreader_state = 0
             self.SerialWriteBufferRaw("M5") #set spreader to off
         
+    # def NewLayer(self, temp_thickness, temp_override_build = 0):
+    #     """Adds goes through all the motions to add a new layer and add these to the buffer
+    #     This function will leave the motion in a RUN state, but will then hand control back
+    #     before idle.
+    #     All piston movements are done by relative motion, not absolute"""
+    #     if(self.homed_state == 1):
+    #         #calculate piston movements
+    #         if (temp_override_build == 0):
+    #             print("Normal new layer")
+    #             temp_b_feed_distance = temp_thickness+ self.nl_piston_clearance 
+    #         else:
+    #             print("Only feed")
+    #             temp_b_feed_distance =  (self.nl_piston_clearance * -1) - self.nl_piston_hysteresis
+    #         temp_f_feed_distance = (temp_thickness * self.nl_piston_overfeed * -1) - self.nl_piston_clearance - self.nl_piston_hysteresis
+    #         # temp_hysteresis_clearance =  self.nl_piston_clearance - self.nl_piston_hysteresis
+            
+    #         #b hysteresis = 1
+    #         #thickness = 0.25
+    #         #clearance = 0.5
+    #         #b moves down 1, moves up 0.25-0.5-1 = -1.25 (nett -0.25)
+    #         #b moves down 1, moves down 0.5-1 = -0.5 (nett 0.5)
+            
+    #         self.SerialGotoXY(self.nl_back_pos_x, self.nl_back_pos_y, self.nl_travel_speed) #move gantry to back position
+            
+    #         #try to take picture
+    #         #self.StatusIndexSet()
+    #         #while (self.StatusIndexChanged() == 0):
+    #         #    time.sleep(0.005)
+    #         #print("Halt exited, state: " + self.motion_state)
+    #         #try:
+    #             #time.sleep(0.5)
+    #             #self.temp_cam.CaptureImage(self.motion_z_pos)
+    #             #time.sleep(0.5)
+    #         #except:
+    #         #    pass
+            
+    #         self.SerialWriteBufferRaw("G91") #set motion to relative
+    #         self.SerialWriteBufferRaw("G1 Z" + str(self.nl_piston_hysteresis) + " F" + str(self.nl_piston_speed))#move hysteresis down
+    #         self.SerialWriteBufferRaw("G1 Z" + str(temp_b_feed_distance) + " F" + str(self.nl_piston_speed)) #Lower build piston to build position
+    #         self.SerialWriteBufferRaw("G1 A" + str(self.nl_piston_hysteresis) + " F" + str(self.nl_piston_speed)) #move hysteresis down
+    #         self.SerialWriteBufferRaw("G1 A" + str(temp_f_feed_distance) + " F" + str(self.nl_piston_speed)) #raise feed piston to feed position
+            
+            
+    #         self.SerialWriteBufferRaw("G90") #set motion to absolute
+    #         self.SpreaderSet(1) #start spreader
+    #         self.SerialGotoXY(self.nl_front_pos_x, self.nl_back_pos_y, self.nl_feed_speed) #move gantry to overshoot
+    #         self.SpreaderSet(0) #stop spreader
+    #         # self.SerialWriteBufferRaw("G91") #set motion to relative
+    #         # self.SerialWriteBufferRaw("G1 Z" + str(self.nl_piston_hysteresis) + " F" + str(self.nl_piston_speed)) #move hysteresis down
+    #         # self.SerialWriteBufferRaw("G1 Z" + str(temp_hysteresis_clearance) + " F" + str(self.nl_piston_speed)) #move build pistons down clearance amount
+    #         # self.SerialWriteBufferRaw("G1 A" + str(self.nl_piston_hysteresis) + " F" + str(self.nl_piston_speed)) #move hysteresis down
+    #         # self.SerialWriteBufferRaw("G1 A" + str(temp_hysteresis_clearance) + " F" + str(self.nl_piston_speed)) #move feed pistons down clearance amount
+    #         # self.SerialWriteBufferRaw("G90") #set motion to absolute
+            
+            
+    #         #wait till state is not idle anymore
+    #         self.StatusIndexSet()
+    #         while (self.StatusIndexChanged() == 0):
+    #             time.sleep(0.005)
+    #         #print("Halt exited, state: " + self.motion_state)
+            
+    #         self.nl_state = 0 #set new layer state to in progress
+
     def NewLayer(self, temp_thickness, temp_override_build = 0):
-        """Adds goes through all the motions to add a new layer and add these to the buffer
-        This function will leave the motion in a RUN state, but will then hand control back
-        before idle.
-        All piston movements are done by relative motion, not absolute"""
+        """Adds a new layer. Piston moves use hysteresis for backlash take-up only
+        (net effect zero); clearance has been removed."""
         if(self.homed_state == 1):
-            #calculate piston movements
+            # --- piston 이동량 계산 (clearance 제거, hysteresis는 백래시용으로 유지) ---
             if (temp_override_build == 0):
                 print("Normal new layer")
-                temp_b_feed_distance = temp_thickness+ self.nl_piston_clearance 
+                temp_b_feed_distance = temp_thickness - self.nl_piston_hysteresis
             else:
                 print("Only feed")
-                temp_b_feed_distance =  (self.nl_piston_clearance * -1) - self.nl_piston_hysteresis
-            temp_f_feed_distance = (temp_thickness * self.nl_piston_overfeed * -1) - self.nl_piston_clearance - self.nl_piston_hysteresis
-            # temp_hysteresis_clearance =  self.nl_piston_clearance - self.nl_piston_hysteresis
-            
-            #b hysteresis = 1
-            #thickness = 0.25
-            #clearance = 0.5
-            #b moves down 1, moves up 0.25-0.5-1 = -1.25 (nett -0.25)
-            #b moves down 1, moves down 0.5-1 = -0.5 (nett 0.5)
-            
-            self.SerialGotoXY(self.nl_back_pos_x, self.nl_back_pos_y, self.nl_travel_speed) #move gantry to back position
-            
-            #try to take picture
-            #self.StatusIndexSet()
-            #while (self.StatusIndexChanged() == 0):
-            #    time.sleep(0.005)
-            #print("Halt exited, state: " + self.motion_state)
-            #try:
-                #time.sleep(0.5)
-                #self.temp_cam.CaptureImage(self.motion_z_pos)
-                #time.sleep(0.5)
-            #except:
-            #    pass
-            
-            self.SerialWriteBufferRaw("G91") #set motion to relative
-            self.SerialWriteBufferRaw("G1 Z" + str(self.nl_piston_hysteresis) + " F" + str(self.nl_piston_speed))#move hysteresis down
-            self.SerialWriteBufferRaw("G1 Z" + str(temp_b_feed_distance) + " F" + str(self.nl_piston_speed)) #Lower build piston to build position
-            self.SerialWriteBufferRaw("G1 A" + str(self.nl_piston_hysteresis) + " F" + str(self.nl_piston_speed)) #move hysteresis down
-            self.SerialWriteBufferRaw("G1 A" + str(temp_f_feed_distance) + " F" + str(self.nl_piston_speed)) #raise feed piston to feed position
-            
-            
-            self.SerialWriteBufferRaw("G90") #set motion to absolute
-            self.SpreaderSet(1) #start spreader
-            self.SerialGotoXY(self.nl_front_pos_x, self.nl_back_pos_y, self.nl_feed_speed) #move gantry to overshoot
-            self.SpreaderSet(0) #stop spreader
-            # self.SerialWriteBufferRaw("G91") #set motion to relative
-            # self.SerialWriteBufferRaw("G1 Z" + str(self.nl_piston_hysteresis) + " F" + str(self.nl_piston_speed)) #move hysteresis down
-            # self.SerialWriteBufferRaw("G1 Z" + str(temp_hysteresis_clearance) + " F" + str(self.nl_piston_speed)) #move build pistons down clearance amount
-            # self.SerialWriteBufferRaw("G1 A" + str(self.nl_piston_hysteresis) + " F" + str(self.nl_piston_speed)) #move hysteresis down
-            # self.SerialWriteBufferRaw("G1 A" + str(temp_hysteresis_clearance) + " F" + str(self.nl_piston_speed)) #move feed pistons down clearance amount
-            # self.SerialWriteBufferRaw("G90") #set motion to absolute
-            
-            
-            #wait till state is not idle anymore
+                temp_b_feed_distance = -self.nl_piston_hysteresis
+            temp_f_feed_distance = (temp_thickness * self.nl_piston_overfeed * -1) - self.nl_piston_hysteresis
+            temp_hysteresis_clearance = -self.nl_piston_hysteresis   # clearance=0 이므로 순수 되돌림용
+
+            self.SerialGotoXY(self.nl_back_pos_x, self.nl_back_pos_y, self.nl_travel_speed) #move gantry to back
+
+            # --- build 내리고 feed 올리기 (앞에 hysteresis로 유격 소진) ---
+            self.SerialWriteBufferRaw("G91")
+            self.SerialWriteBufferRaw("G1 Z" + str(self.nl_piston_hysteresis) + " F" + str(self.nl_piston_speed)) #hysteresis down
+            self.SerialWriteBufferRaw("G1 Z" + str(temp_b_feed_distance) + " F" + str(self.nl_piston_speed))       #build to position
+            self.SerialWriteBufferRaw("G1 A" + str(self.nl_piston_hysteresis) + " F" + str(self.nl_piston_speed)) #hysteresis down
+            self.SerialWriteBufferRaw("G1 A" + str(temp_f_feed_distance) + " F" + str(self.nl_piston_speed))       #feed to position
+            self.SerialWriteBufferRaw("G90")
+
+            # --- 스프레딩 ---
+            self.SpreaderSet(1)
+            self.SerialGotoXY(self.nl_front_pos_x, self.nl_back_pos_y, self.nl_feed_speed) #spread
+            self.SpreaderSet(0)
+
+            # --- hysteresis 되돌리기 (순 이동 = thickness / feed, clearance 없음) ---
+            self.SerialWriteBufferRaw("G91")
+            self.SerialWriteBufferRaw("G1 Z" + str(self.nl_piston_hysteresis) + " F" + str(self.nl_piston_speed))
+            self.SerialWriteBufferRaw("G1 Z" + str(temp_hysteresis_clearance) + " F" + str(self.nl_piston_speed))
+            self.SerialWriteBufferRaw("G1 A" + str(self.nl_piston_hysteresis) + " F" + str(self.nl_piston_speed))
+            self.SerialWriteBufferRaw("G1 A" + str(temp_hysteresis_clearance) + " F" + str(self.nl_piston_speed))
+            self.SerialWriteBufferRaw("G90")
+
             self.StatusIndexSet()
             while (self.StatusIndexChanged() == 0):
                 time.sleep(0.005)
-            #print("Halt exited, state: " + self.motion_state)
-            
-            self.nl_state = 0 #set new layer state to in progress
+            self.nl_state = 0
             
     def SetOverfeed(self, temp_percent):
         """sets the percentage of overfeed, 100% is 1mm of feed for every 1mm of build, 110% is 1.1mm of feed for every 1mm of build"""
