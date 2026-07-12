@@ -434,12 +434,13 @@ class CameraController(QtWidgets.QWidget):
     # --- Capture Logic (Called from Print Thread) ---
 
     def _open_camera(self, cv2):
-        """카메라를 열고 설정을 한 번만 적용 후 반환. 실패 시 None."""
+        """Open the camera and apply settings once. Returns None on failure."""
         cap = cv2.VideoCapture(self.camera_port, BACKEND)
         if not cap.isOpened():
             return None
 
-        # 설정은 카메라 오픈 직후 한 번만 — LED loop 에서 반복하면 DSHOW 지연 발생
+        # Apply settings only once, right after open — repeating them in the
+        # LED loop causes DSHOW delays
         cap.set(cv2.CAP_PROP_FOURCC, cv2.VideoWriter_fourcc(*"MJPG"))
         cap.set(cv2.CAP_PROP_FRAME_WIDTH,  self.capture_width)
         cap.set(cv2.CAP_PROP_FRAME_HEIGHT, self.capture_height)
@@ -447,22 +448,24 @@ class CameraController(QtWidgets.QWidget):
         cap.set(cv2.CAP_PROP_EXPOSURE,      self.exposure_value)
         cap.set(cv2.CAP_PROP_GAIN,          GAIN_VALUE)
         cap.set(cv2.CAP_PROP_AUTO_WB,       AUTO_WB)
-        # FPS는 최대로 — 1로 고정하면 LED당 1초 강제 대기 발생
+        # Keep FPS maxed — locking it to 1 forces a 1s stall per LED
         cap.set(cv2.CAP_PROP_FPS, 30)
-        # 드라이버 내부 버퍼를 1장으로 강제 — grab() 몇 번으로는 안 비워지는
-        # stale frame 문제 방지 (photostereo_capture.py와 동일)
+        # Force the driver's internal buffer down to a single frame — a few
+        # grab() calls alone don't clear the stale-frame problem
+        # (matches photostereo_capture.py)
         cap.set(cv2.CAP_PROP_BUFFERSIZE, 1)
 
-        # warm-up: 설정 적용 후 버퍼 flush
+        # Warm-up: flush the buffer after settings are applied
         for _ in range(WARMUP_FRAMES):
             cap.read()
 
         return cap
 
     def _grab_frame(self, cap, cv2):
-        """read()×LED_FLUSH_FRAMES 로 오래된 프레임을 확실히 밀어내고 마지막 프레임 사용.
-        grab()+retrieve()는 일부 DSHOW/MJPG 조합에서 같은 stale frame을
-        계속 반환하는 경우가 있어 read()로 매번 파이프라인을 진행시킨다."""
+        """read()xLED_FLUSH_FRAMES to reliably push out stale frames and use
+        the last one. grab()+retrieve() can keep returning the same stale
+        frame on some DSHOW/MJPG combos, so read() is used instead to
+        advance the pipeline on every call."""
         f = None
         for _ in range(LED_FLUSH_FRAMES):
             ret, f = cap.read()
@@ -477,14 +480,16 @@ class CameraController(QtWidgets.QWidget):
         return frame
 
     def capture_led_sequence(self, filename_stem: str):
-        """LED 1~5 를 순서대로 켜고, 각 LED 마다 카메라 캡처 후 저장.
+        """Turn LEDs 1-5 on in sequence, capturing a camera frame for each.
 
-        파일명: <filename_stem>_led1.png … <filename_stem>_led5.png
-        Arduino 미연결 시 LED 없이 단일 캡처(noLED.png)로 fallback.
-        카메라 설정은 오픈 시 한 번만 적용 — LED 전환 사이 딜레이 없음.
-        (LED마다 open/close 하면 DSHOW 초기화가 ~4s/회로 너무 느려 원복함.
-        stale frame 방지는 LED_SETTLE_MS/LED_FLUSH_FRAMES로 대응.)
-        Blocking — 프린트 스레드에서 직접 호출.
+        Filenames: <filename_stem>_led1.png ... <filename_stem>_led5.png
+        Falls back to a single capture with no LED (noLED.png) if the
+        Arduino isn't connected.
+        Camera settings are applied once at open — no delay between LEDs.
+        (Opening/closing the camera per LED was reverted: DSHOW init takes
+        ~4s each, far too slow. Stale-frame prevention instead relies on
+        LED_SETTLE_MS/LED_FLUSH_FRAMES.)
+        Blocking — called directly from the print thread.
         """
         if not self.camera_enabled:
             return
@@ -497,7 +502,7 @@ class CameraController(QtWidgets.QWidget):
                 print(f"CAMERA: Could not open port {self.camera_port}")
                 return
 
-            # open 직후 stale frame 확실히 비우기
+            # Make sure stale frames are flushed right after open
             time.sleep(0.3)
             for _ in range(10):
                 cap.grab()
