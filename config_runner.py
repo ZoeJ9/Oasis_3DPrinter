@@ -482,8 +482,14 @@ if __name__ == "__main__":
         "--dry-run", action="store_true", required=True,
         help="Required flag — this CLI only supports no-hardware dry runs.",
     )
+    parser.add_argument(
+        "--svg-layers", type=int, default=None,
+        help="Simulated total SVG layer count, so the continuous-build "
+             "sum(step['layers']) <= svg_layers validation can run with no "
+             "SVG loaded. Omit to skip validation.",
+    )
     args = parser.parse_args()
 
     runner = ConfigRunner(args.csv_path, main_window=None)
-    runner.run()
+    runner.run(simulated_svg_layers=args.svg_layers)
     print(f"[ConfigRunner] dry-run log written to {runner._log_path}")
