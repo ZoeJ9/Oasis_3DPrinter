@@ -141,7 +141,7 @@ def apply_print_condition(mw, params: dict) -> dict:
     return applied
 
 LOG_COLUMNS = [
-    "timestamp", "step_id", "layer_idx", "pre_or_post", "note",
+    "timestamp", "step_id", "layer_idx", "svg_layer", "pre_or_post", "note",
     "image_filename",
     # applied_* = read back from the hardware objects after injection, not the
     # raw CSV value — this is what the printer actually used for this layer.
@@ -242,6 +242,26 @@ class ConfigRunner:
             )
         return steps
 
+    def _validate_against_svg(self, svg_layers: int) -> None:
+        """Continuous build: each step consumes step['layers'] SVG layers in
+        sequence, so the sum must fit inside the loaded SVG. Called from
+        run() once the real (or simulated, in dry-run) layer count is known.
+        """
+        total = sum(s["layers"] for s in self._steps)
+        if total > svg_layers:
+            raise ValueError(
+                f"print_config.csv steps consume {total} SVG layers "
+                f"(sum of each step's 'layers' column) but the loaded SVG "
+                f"only has {svg_layers}. Reduce step layer counts or load a "
+                f"taller SVG."
+            )
+        if total < svg_layers:
+            print(
+                f"[ConfigRunner] NOTICE: steps consume {total} of "
+                f"{svg_layers} SVG layers — trailing {svg_layers - total} "
+                f"layer(s) will be unprinted."
+            )
+
     # ── Parameter application ──────────────────────────────────────────────────
 
     def _apply_step(self, step: dict) -> None:
@@ -293,12 +313,13 @@ class ConfigRunner:
         slug = _note_slug(note)
         return f"s{step_id:03d}_L{layer_idx:03d}_{pre_or_post}_{slug}"
 
-    def log_capture(self, step: dict, layer_idx: int,
+    def log_capture(self, step: dict, layer_idx: int, svg_layer: int,
                     pre_or_post: str, image_filename: str) -> None:
         row = {
             "timestamp":       datetime.now().isoformat(timespec="seconds"),
             "step_id":         step["step_id"],
             "layer_idx":       layer_idx,
+            "svg_layer":       svg_layer,
             "pre_or_post":     pre_or_post,
             "note":            step["note"],
             "image_filename":  image_filename + ".png",
@@ -315,7 +336,7 @@ class ConfigRunner:
 
     # ── Capture helper ─────────────────────────────────────────────────────────
 
-    def _capture(self, step: dict, layer_idx: int, pre_or_post: str) -> None:
+    def _capture(self, step: dict, layer_idx: int, svg_layer: int, pre_or_post: str) -> None:
         fname = self.capture_filename(
             step["step_id"], layer_idx, pre_or_post, step["note"]
         )
@@ -323,56 +344,89 @@ class ConfigRunner:
             self.mw.camera_window.capture_sync(fname)
         else:
             print(f"[ConfigRunner] (no-hw) capture: {fname}.png")
-        self.log_capture(step, layer_idx, pre_or_post, fname)
+        self.log_capture(step, layer_idx, svg_layer, pre_or_post, fname)
 
     # ── Main entry point ───────────────────────────────────────────────────────
 
-    def run(self) -> None:
-        """Execute all steps in order.  Call this instead of the bare layer loop.
+    def run(self, simulated_svg_layers: int = None) -> None:
+        """Execute all steps as ONE continuous build over a single loaded SVG.
 
-        Each step prints the full SVG from layer 1 (SVG counter resets per step).
-        After all SVG layers are printed, separation_layers blank recoats are done
-        before the next step begins.
+        Step 1 prints SVG layers 1..step1['layers'], step 2 continues from
+        where step 1 left off, etc. — current_layer is never reset mid-build.
+        Each step's separation_layers blank recoats (at least 1, unless it's
+        the last step) run after its own SVG layers and before the next
+        step's parameters are applied.
+
+        simulated_svg_layers: dry-run only (mw is None) — stands in for
+        imageconverter.svg_layers so the sum-of-steps validation and the
+        continuous svg_layer counter can be exercised with no SVG loaded.
         """
+        svg_layers = (
+            self.mw.imageconverter.svg_layers if self.mw is not None
+            else simulated_svg_layers
+        )
+        if svg_layers is not None:
+            self._validate_against_svg(svg_layers)
+
         # dpi is uniform across the CSV (validated in _load_csv) — apply once,
         # before the first rasterization, instead of re-applying every step.
         if self.mw is not None:
             apply_print_condition(self.mw, {"dpi": self._steps[0]["dpi"]})
+            self.mw.current_layer        = 1
+            self.mw.current_layer_height = self.mw.imageconverter.svg_layer_height[0]
+        svg_layer = 1  # dry-run mirror of mw.current_layer, 1-based
 
-        for step in self._steps:
+        for step_num, step in enumerate(self._steps):
+            is_last_step = step_num == len(self._steps) - 1
             self.current_step_id = step["step_id"]
             self.current_note    = step["note"]
 
             self._apply_step(step)
 
-            # Reset SVG layer counter to 1 at the start of every step
-            if self.mw is not None:
-                self.mw.current_layer        = 1
-                self.mw.current_layer_height = self.mw.imageconverter.svg_layer_height[0]
-
-            n_svg = self.mw.imageconverter.svg_layers if self.mw is not None else int(step["layers"])
+            n_step_layers = int(step["layers"])
+            svg_start = self.mw.current_layer if self.mw is not None else svg_layer
             print(
                 f"[ConfigRunner] === Step {step['step_id']}: "
-                f"{n_svg} SVG layers, sep={step['separation_layers']}, "
-                f"note='{step['note']}' ==="
+                f"SVG layers {svg_start}-{svg_start + n_step_layers - 1}, "
+                f"sep={step['separation_layers']}, note='{step['note']}' ==="
             )
 
-            for layer_idx in range(n_svg):
-                is_last = layer_idx == n_svg - 1
+            for layer_idx in range(n_step_layers):
+                is_last = layer_idx == n_step_layers - 1
                 do_capture = (
                     self.capture_policy == "all"
                     or (self.capture_policy == "last" and is_last)
                 )
+                cur_svg_layer = self.mw.current_layer if self.mw is not None else svg_layer
                 if do_capture:
-                    self._capture(step, layer_idx, "pre")
+                    self._capture(step, layer_idx, cur_svg_layer, "pre")
                 self._print_one_layer(step, layer_idx)
                 if do_capture:
-                    self._capture(step, layer_idx, "post")
-                self._start_next_spread()
+                    self._capture(step, layer_idx, cur_svg_layer, "post")
+                if not is_last:
+                    # Mid-step: spread for the next SVG layer immediately.
+                    # On the step's last layer, skip this — separation_spread
+                    # (below) owns the next spread so thickness/overfeed for
+                    # the *next* step's params apply cleanly, with no stray
+                    # extra spread using the outgoing step's thickness.
+                    self._start_next_spread()
+                if self.mw is None:
+                    svg_layer += 1
 
-            # Blank recoats between steps (no SBR — powder only)
-            n_sep = int(step["separation_layers"])
-            if n_sep > 0:
+            # Consume the pending post-layer spread (queued by
+            # _print_single_config_layer after the step's last layer) so it
+            # doesn't leak into the next step — separation recoats replace it.
+            if self.mw is not None:
+                self.mw._pending_layer_thickness = None
+
+            # Blank recoats between steps (no SBR — powder only). Skipped
+            # entirely after the last step — the build is done, nothing
+            # left to spread for. Otherwise at least one always runs, even
+            # if separation_layers=0: the step-boundary spread cancelled
+            # above still has to happen so the next step's first layer isn't
+            # printed onto bare, unspread powder.
+            if not is_last_step:
+                n_sep = max(1, int(step["separation_layers"]))
                 print(f"[ConfigRunner] {n_sep} separation layer(s) after step {step['step_id']}")
                 self._separation_spread(step, n_sep)
 

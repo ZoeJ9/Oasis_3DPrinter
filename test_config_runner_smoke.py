@@ -18,7 +18,7 @@ with tempfile.TemporaryDirectory() as tmp:
         f.write(CSV)
 
     runner = ConfigRunner(csv_path, main_window=None)   # no hardware
-    runner.run()                                         # prints to stdout
+    runner.run(simulated_svg_layers=4)                   # 2 steps x 2 layers = 4
 
     log_path = os.path.join(tmp, "config_log.csv")
     with open(log_path) as f:

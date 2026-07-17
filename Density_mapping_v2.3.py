@@ -1923,7 +1923,14 @@ class MainWindow(QtWidgets.QMainWindow):
 
     def _config_log_capture(self, layer_idx: int, pre_or_post: str,
                              image_filename: str) -> None:
-        """Write a config_log.csv row — only when a config run is active."""
+        """Write a config_log.csv row — only when a config run is active.
+
+        This path is only reachable from _PrintSVG_inner (plain Print/DOE
+        Print), never from ConfigRunner.run() (which logs via its own
+        _capture/log_capture calls with the step-relative layer_idx and the
+        absolute svg_layer kept separate). Here layer_idx IS the absolute
+        SVG index, so it's passed through as both.
+        """
         runner = getattr(self, "_active_config_runner", None)
         if runner is None:
             return
@@ -1932,7 +1939,7 @@ class MainWindow(QtWidgets.QMainWindow):
             None,
         )
         if step is not None:
-            runner.log_capture(step, layer_idx, pre_or_post, image_filename)
+            runner.log_capture(step, layer_idx, layer_idx, pre_or_post, image_filename)
 
     def _init_print_state(self):
         """Initialise all motion/print variables shared by both print paths.
@@ -2080,8 +2087,11 @@ class MainWindow(QtWidgets.QMainWindow):
     def _print_single_config_layer(self, step: dict, layer_idx: int) -> None:
         """Print exactly one SVG layer using parameters already applied by ConfigRunner.
 
-        current_layer is reset to 1 by ConfigRunner.run() at each step start,
-        so every step prints the full SVG from layer 1.
+        current_layer advances continuously across the whole build — it is
+        set to 1 once at the start of run() and never reset mid-build, so
+        each step picks up at the SVG index the previous step left off at.
+        layer_idx (passed in) is the 0-based index WITHIN the current step,
+        used only for capture filenames/logging.
         Camera captures are handled by ConfigRunner._capture, not here.
         """
         svg_layer = self.current_layer
@@ -2237,9 +2247,9 @@ class MainWindow(QtWidgets.QMainWindow):
                 break
 
         self.current_layer += 1
-        # Use svg_layers (total layers in file) as upper bound.
-        # ConfigRunner resets current_layer to 1 at each step start,
-        # so this correctly handles the per-step SVG replay.
+        # Use svg_layers (total layers in file) as upper bound. ConfigRunner
+        # runs one continuous build over the SVG — current_layer advances
+        # across step boundaries and is never reset mid-build.
         if self.current_layer <= self.imageconverter.svg_layers:
             next_h = self.imageconverter.svg_layer_height[self.current_layer - 1]
             if getattr(self, "_active_config_runner", None) is not None:
