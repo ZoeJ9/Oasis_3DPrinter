@@ -1,0 +1,5 @@
+<svg width="50" height="52" xmlns="http://www.w3.org/2000/svg" xmlns:svg="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" xmlns:slic3r="http://slic3r.org/namespaces/slic3r">
+  <g id="layer0" slic3r:z="5e-008">
+    <polygon slic3r:type="contour" points="50,52 0,52 0,0 50,0" style="fill: white" />
+  </g>
+</svg>

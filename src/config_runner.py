@@ -14,6 +14,9 @@ from datetime import datetime
 
 import pandas as pd
 
+PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+LOGS_DIR = os.path.join(PROJECT_ROOT, "logs")
+
 
 # ── Valid value sets for range warnings ────────────────────────────────────────
 _VALID = {
@@ -175,9 +178,8 @@ class ConfigRunner:
         self.current_note: str = ""
 
         self._steps = self._load_csv(csv_path)
-        self._log_path = os.path.join(
-            os.path.dirname(os.path.abspath(csv_path)), "config_log.csv"
-        )
+        os.makedirs(LOGS_DIR, exist_ok=True)
+        self._log_path = os.path.join(LOGS_DIR, "config_log.csv")
         self._log_exists = os.path.exists(self._log_path)
         self._applied: dict = {}  # no-hw (dry-run) shadow of what _apply_step set
 

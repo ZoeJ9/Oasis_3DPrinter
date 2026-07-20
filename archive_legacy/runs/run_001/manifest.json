@@ -1,0 +1,28 @@
+{
+  "run_id": "run_001",
+  "timestamp": "2026-03-31T16:25:31",
+  "git_hash": "unknown",
+  "source_csv": "C:\\Users\\mint9\\Documents\\CeramicPrinter\\Oasis_3DPrinter\\oasis_change_parameters.csv",
+  "resolved_config": {
+    "print_speed": 2200,
+    "travel_speed": 3000,
+    "layer_thickness": 0.1,
+    "layer_passes": 3,
+    "overfeed_percent": 100,
+    "jog_xy_distance": 10,
+    "jog_xy_speed": 6000,
+    "jog_z_distance": 1,
+    "jog_z_speed": 150,
+    "dpi": 300,
+    "density": 500,
+    "preheat_pulses": 5000,
+    "prime_pulses": 100,
+    "inkjet_position_delay": 0.3,
+    "dwell_time": 5,
+    "capture_output_dir": "captured_images",
+    "webcam_index": 1,
+    "svg_offset_x": "auto",
+    "svg_offset_y": "auto",
+    "threshold": 128
+  }
+}

@@ -2,23 +2,23 @@
 
 This repository is a control stack for the Oasis 3D printer / powder-bed inkjet printer.
 
-The main GUI and print engine is in `Oasis_printer_260327.py` and supports:
+The main GUI and print engine is in `main.py` and supports:
 
-- GRBL motion control (X/Y gantry + build/powder axes) through `SerialGRBL.py`
-- HP45 inkjet printhead management through `SerialHP45.py`
-- Image file conversion and rasterisation through `ImageConverter.py`
+- GRBL motion control (X/Y gantry + build/powder axes) through `src/SerialGRBL.py`
+- HP45 inkjet printhead management through `src/SerialHP45.py`
+- Image file conversion and rasterisation through `src/ImageConverter.py`
 - Densities and DPI conversion for print output
 - Layer-by-layer print with sweep-based line injection
-- Optional `OpenCV` camera capture before/after each layer via `CameraController` in `Oasis_printer_260327.py`
+- Optional `OpenCV` camera capture before/after each layer via `CameraController` in `main.py`
 - Pause/abort and status visualization
 
 Other useful components:
 
-- `Study_params_loader_and_print.py`: Parameter injection workflow from CSV (`oasis_change_parameters.csv`)
+- `archive_legacy/Study_params_loader_and_print.py`: legacy parameter-injection workflow from CSV (`oasis_change_parameters.csv`)
   - Reads `name`, `kind`, `value`, `lower`, `upper`, `code_var`, etc.
   - Builds resolved config and writes manifest + resolved params
   - Optionally launches GUI with locked or overridden parameters
-- `B64.py`: Burst encoding/decoding support for sending print buffer lines to HP45
+- `src/B64.py`: Burst encoding/decoding support for sending print buffer lines to HP45
 
 ---
 
@@ -87,12 +87,12 @@ shift. `pixel_to_pos_multiplier` and `imageconverter` remain untouched.
 
 **CSV-driven parameter sweep (DOE) integration** — `Oasis_printer_v2.1.py`:
 
-- `config_runner.py`: `ConfigRunner` class loads `print_config.csv` and drives
+- `src/config_runner.py`: `ConfigRunner` class loads `config/print_config.csv` and drives
   layer-by-layer printing with per-step parameter overrides
 - Per-step parameters: `print_speed`, `travel_speed`, `layer_thickness`, `dpi`,
   `density`, `preheat`, `prime`, `layer_passes`, `overfeed`
 - Step-aware image filenames: `s001_L003_pre_baseline.png` / `_post_`
-- Per-capture CSV log: `config_log.csv` alongside the config file
+- Per-capture CSV log: `logs/config_log.csv`
 - Post-capture timing: photo taken before `NewLayer()` so powder doesn't cover print
 - `_init_print_state()` shared by both normal and config print paths
 - `QFileDialog` parent fixed to `self.ui` (prevents window resize on CSV upload)
@@ -179,7 +179,7 @@ pip install -r requirements.txt
 3. Launch from parameter loader (recommended):
 
 ```bash
-python Study_params_loader_and_print.py
+python main.py
 ```
 
 4. The GUI will open. Steps in GUI:
@@ -199,18 +199,18 @@ python Study_params_loader_and_print.py
 
 ## Camera integration
 
-`CameraController` in `Oasis_printer_260327.py` uses OpenCV:
+`CameraController` in `main.py` uses OpenCV:
 
 - detects up to 8 cameras on startup
 - `capture_sync()` waits for settle time and grabs one frame
-- saves PNG to `timelapse_output` (default) or configured folder
+- saves PNG to `logs/timelapse_output` (default) or configured folder
 - updates live QLabel preview in GUI
 
 ---
 
 ## Parameter injection workflow
 
-`Study_params_loader_and_print.py`:
+`archive_legacy/Study_params_loader_and_print.py` (legacy):
 
 - reads `oasis_change_parameters.csv` and validates bounds
 - resolves fixed & variance parameters
@@ -228,10 +228,10 @@ Attributes mapped from CSV:
 
 ## Notes
 
-- `Oasis_printer_260327.py` implements two print kernels:
+- `main.py` implements two print kernels:
   - `PrintArray`: raster from currently converted bitmap
   - `PrintSVG`: SVG layer loop with full layer-recoater integration
-- `PrintSVG` uses hard-coded defaults but can be overridden by `Study_params_loader_and_print.py` adapter
+- `PrintSVG` uses hard-coded defaults but can be overridden by the archived parameter-loader adapter
 - Expect non-blocking serial performance limits; heavy sleeps inserted to work around Python GIL and serial throughput delays
 
 ---

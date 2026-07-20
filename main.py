@@ -24,11 +24,11 @@ from PyQt5 import QtCore, QtGui, QtWidgets
 from PyQt5.QtWidgets import QFileDialog
 from PyQt5.QtWidgets import QMessageBox, QComboBox, QLabel
 from PyQt5.QtGui import QPixmap, QColor, QImage
-from SerialGRBL import GRBL
-from SerialHP45 import HP45
 import os
-from ImageConverter import ImageConverter
-import B64
+from src.SerialGRBL import GRBL
+from src.SerialHP45 import HP45
+from src.ImageConverter import ImageConverter
+from src import B64
 _builtin_min = min  # preserved before `from numpy import *` shadows it below
 _builtin_max = max
 from numpy import *
@@ -43,13 +43,18 @@ import serial
 # this is the reason why sending inkjet while moving is difficult. Will fix later, with another attempt
 
 import cv2 as _cv2_global
-from config_runner import ConfigRunner
-from fisheye_apply import FisheyeCorrector
+from src.config_runner import ConfigRunner
+from src.fisheye_apply import FisheyeCorrector
+
+PROJECT_ROOT = os.path.dirname(os.path.abspath(__file__))
+SRC_DIR = os.path.join(PROJECT_ROOT, "src")
+CONFIG_DIR = os.path.join(PROJECT_ROOT, "config")
+LOGS_DIR = os.path.join(PROJECT_ROOT, "logs")
 
 # CAMERA SETTINGS — validated for 175mm bed setup
 # ============================================================
 DISTORTION_PARAMS_PATH = os.path.join(
-    os.path.dirname(__file__), "Camera setting", "undistort_output", "distortion_params.json"
+    PROJECT_ROOT, "archive_legacy", "Camera setting", "undistort_output", "distortion_params.json"
 )
 _fisheye_corrector = None
 
@@ -106,7 +111,7 @@ class CameraController(QtWidgets.QWidget):
         # Default Settings
         self.camera_port = 0
         self.pause_time = 0.0  # Total time to pause for photo (seconds)
-        self.output_dir = os.path.join(os.getcwd(), "timelapse_output")
+        self.output_dir = os.path.join(LOGS_DIR, "timelapse_output")
         self.camera_enabled = True
         self.exposure_value = EXPOSURE_VALUE  # log2(s), controlled by UI spinbox
         self._camera_list = []  # list of {"index": int, "name": str}
@@ -663,8 +668,7 @@ class MainWindow(QtWidgets.QMainWindow):
     def __init__(self):
         super(MainWindow, self).__init__()
 
-        script_dir = os.path.dirname(os.path.abspath(__file__))
-        ui_path = os.path.join(script_dir, "Oasis_interface_v2.ui")
+        ui_path = os.path.join(SRC_DIR, "Oasis_interface_v2.ui")
         Form, Window = uic.loadUiType(ui_path)
 
         self.ui = Window()
@@ -675,7 +679,7 @@ class MainWindow(QtWidgets.QMainWindow):
         # Qt paint widgets once at the default font size, then some (buttons
         # inside group boxes especially) don't fully re-layout on the style
         # change and show ghosted/doubled text from the stale paint.
-        qss_path = os.path.join(script_dir, "oasis_style.qss")
+        qss_path = os.path.join(SRC_DIR, "oasis_style.qss")
         with open(qss_path, "r", encoding="utf-8") as _f:
             self.ui.setStyleSheet(_f.read())
 
@@ -1966,7 +1970,7 @@ class MainWindow(QtWidgets.QMainWindow):
             )
             return
         csv_path, _ = QFileDialog.getOpenFileName(
-            self.ui, "Select config CSV", "", "CSV files (*.csv)"
+            self.ui, "Select config CSV", CONFIG_DIR, "CSV files (*.csv)"
         )
         if not csv_path:
             return
