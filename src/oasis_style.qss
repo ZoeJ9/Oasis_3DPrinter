@@ -7,16 +7,16 @@ QWidget {
     background-color: #f8fafc;
     color: #1e293b;
     font-family: "Segoe UI", sans-serif;
-    font-size: 16px;
+    font-size: 12px;
 }
 
 /* 개별 패널 카드 */
 QGroupBox {
     background-color: #ffffff;
-    border: 3px solid #e2e8f0;
-    border-radius: 10px;
-    margin-top: 12px;
-    padding-top: 8px;
+    border: 1px solid #e2e8f0;
+    border-radius: 8px;
+    margin-top: 10px;
+    padding-top: 6px;
     font-weight: bold;
     text-transform: uppercase;
 }
@@ -41,14 +41,14 @@ QGroupBox::title {
 /* 일반 입력 위젯 */
 QLineEdit, QComboBox, QSpinBox {
     background-color: #ffffff;
-    border: 3px solid #cbd5e1;
+    border: 1px solid #cbd5e1;
     border-radius: 6px;
-    padding: 4px 8px;
+    padding: 2px 6px;
     color: #0f172a;
 }
 
 QLineEdit:focus, QComboBox:focus, QSpinBox:focus {
-    border: 3px solid #2563eb;
+    border: 1px solid #2563eb;
 }
 
 QLineEdit:read-only {
@@ -80,10 +80,9 @@ QSlider::sub-page:horizontal {
 /* 기본 버튼 */
 QPushButton {
     background-color: #f1f5f9;
-    border: 3px solid #cbd5e1;
+    border: 1px solid #cbd5e1;
     border-radius: 6px;
-    padding: 4px 8px;
-    min-height: 32px;
+    padding: 2px 6px;
     font-weight: bold;
     color: #334155;
 }
