@@ -809,7 +809,6 @@ class MainWindow(QtWidgets.QMainWindow):
         self.config_print_btn = QtWidgets.QPushButton("Config Print")
         self.config_print_btn.clicked.connect(self.RunConfigPrint)
         self.form.statusBar.addPermanentWidget(self.config_print_btn)
-        # self.form.file_print_button.clicked.connect(self.RenderRGB)
         self.form.layer_slider.valueChanged.connect(self.UpdateLayer)
         self.form.start_layer_spinbox.setEnabled(False)  # disabled until file is loaded
         self.form.threshold_slider.valueChanged.connect(self.UpdateThresholdSliderValue)
@@ -1448,32 +1447,6 @@ class MainWindow(QtWidgets.QMainWindow):
 
         painter.end()
         return canvas
-
-    def RenderAlpha(self):
-        """Renders alpha mask (used for troubleshooting)"""
-        self.imageconverter.AlphaMaskToImage()
-        self.output_image_display = self.imageconverter.output_image
-        if (
-            self.output_image_display.width() > 300
-            and self.output_image_display.height() > 300
-        ):
-            self.output_image_display = self.output_image_display.scaled(
-                300, 300, QtCore.Qt.KeepAspectRatio
-            )
-        self.form.output_window.setPixmap(self.output_image_display)
-
-    def RenderRGB(self):
-        """Renders only RGB, ignoring alpha (used for troubleshooting)"""
-        self.imageconverter.RGBToImage()
-        self.output_image_display = self.imageconverter.output_image
-        if (
-            self.output_image_display.width() > 300
-            and self.output_image_display.height() > 300
-        ):
-            self.output_image_display = self.output_image_display.scaled(
-                300, 300, QtCore.Qt.KeepAspectRatio
-            )
-        self.form.output_window.setPixmap(self.output_image_display)
 
     def RunPrintArray(self):
         """Starts a thread for the print array function"""

@@ -268,20 +268,6 @@ class HP45(serial.Serial):
             if (self.status_state > 2): #reset state
                 self.status_state = 0
     
-    def GetWindowOutput(self):
-        """returns the entire string of what was sent since the 
-        last call of this function, then clears that buffer"""
-        temp_return = self.window_output_buffer #write to return value
-        self.window_output_buffer = "" #clear buffer
-        return temp_return #return response
-        
-    def GetWindowInput(self):
-        """returns the entire string of what was received since the 
-        last call of this function, then clears that buffer"""
-        temp_return = self.window_input_buffer #write to return value
-        self.window_input_buffer = "" #clear buffer
-        return temp_return #return response
-        
     def Preheat(self, temp_pulses):
         """preheats the printhead for the given amount of pulses"""
         if (self.connection_state == 1): #check if connected before sending
@@ -321,31 +307,10 @@ class HP45(serial.Serial):
             
     def ClearBuffer(self):
         """Completely clears the buffer"""
-        self.SerialWriteBufferRaw("BCL") #send clear command
-        # self.Prime(500) #prime added here
-        print("i'm pissing we're not in the if statement")
         if (self.connection_state == 1): #check if connected before sending
             self.SerialWriteBufferRaw("BCL") #send clear command
-            # self.Prime(500) #prime added here
-            print("i'm pissing we're in the if statement")
-            
-        
+
     def TestPrinthead(self):
         """Sends the test command to the printhead"""
         if (self.connection_state == 1): #check if connected before sending
             self.SerialWriteBufferRaw("THD")
-    
-    def SendInkjetLineRaw(self, temp_position, temp_inkjet_line):
-        """Sends a line of inkjet information in raw format in the given coordinate"""
-        #convert position to B64
-        temp_pos_b64 = B64.B64ToSingle(temp_position)
-        #print("Converting position: " + str(temp_position) + " to: " + str(temp_pos_b64))
-        
-        #convert inkjet line to B64
-        temp_inkjet_b64 = B64.B64ToArray(temp_inkjet_line)
-        #print("Converting position: " + str(temp_inkjet_line))
-        #print(" to: " + str(temp_inkjet_b64))
-        
-        #convert turn this data into an inkjet command and add to buffer
-        self.SerialWriteBufferRaw("SBR " + str(temp_pos_b64) + " " + str(temp_inkjet_b64))
-        #print("SBR " + str(temp_pos_b64) + " " + str(temp_inkjet_b64) + "\r")

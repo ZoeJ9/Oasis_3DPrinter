@@ -323,69 +323,6 @@ class GRBL(serial.Serial):
             self.spreader_state = 0
             self.SerialWriteBufferRaw("M5") #set spreader to off
         
-    # def NewLayer(self, temp_thickness, temp_override_build = 0):
-    #     """Adds goes through all the motions to add a new layer and add these to the buffer
-    #     This function will leave the motion in a RUN state, but will then hand control back
-    #     before idle.
-    #     All piston movements are done by relative motion, not absolute"""
-    #     if(self.homed_state == 1):
-    #         #calculate piston movements
-    #         if (temp_override_build == 0):
-    #             print("Normal new layer")
-    #             temp_b_feed_distance = temp_thickness+ self.nl_piston_clearance 
-    #         else:
-    #             print("Only feed")
-    #             temp_b_feed_distance =  (self.nl_piston_clearance * -1) - self.nl_piston_hysteresis
-    #         temp_f_feed_distance = (temp_thickness * self.nl_piston_overfeed * -1) - self.nl_piston_clearance - self.nl_piston_hysteresis
-    #         # temp_hysteresis_clearance =  self.nl_piston_clearance - self.nl_piston_hysteresis
-            
-    #         #b hysteresis = 1
-    #         #thickness = 0.25
-    #         #clearance = 0.5
-    #         #b moves down 1, moves up 0.25-0.5-1 = -1.25 (nett -0.25)
-    #         #b moves down 1, moves down 0.5-1 = -0.5 (nett 0.5)
-            
-    #         self.SerialGotoXY(self.nl_back_pos_x, self.nl_back_pos_y, self.nl_travel_speed) #move gantry to back position
-            
-    #         #try to take picture
-    #         #self.StatusIndexSet()
-    #         #while (self.StatusIndexChanged() == 0):
-    #         #    time.sleep(0.005)
-    #         #print("Halt exited, state: " + self.motion_state)
-    #         #try:
-    #             #time.sleep(0.5)
-    #             #self.temp_cam.CaptureImage(self.motion_z_pos)
-    #             #time.sleep(0.5)
-    #         #except:
-    #         #    pass
-            
-    #         self.SerialWriteBufferRaw("G91") #set motion to relative
-    #         self.SerialWriteBufferRaw("G1 Z" + str(self.nl_piston_hysteresis) + " F" + str(self.nl_piston_speed))#move hysteresis down
-    #         self.SerialWriteBufferRaw("G1 Z" + str(temp_b_feed_distance) + " F" + str(self.nl_piston_speed)) #Lower build piston to build position
-    #         self.SerialWriteBufferRaw("G1 A" + str(self.nl_piston_hysteresis) + " F" + str(self.nl_piston_speed)) #move hysteresis down
-    #         self.SerialWriteBufferRaw("G1 A" + str(temp_f_feed_distance) + " F" + str(self.nl_piston_speed)) #raise feed piston to feed position
-            
-            
-    #         self.SerialWriteBufferRaw("G90") #set motion to absolute
-    #         self.SpreaderSet(1) #start spreader
-    #         self.SerialGotoXY(self.nl_front_pos_x, self.nl_back_pos_y, self.nl_feed_speed) #move gantry to overshoot
-    #         self.SpreaderSet(0) #stop spreader
-    #         # self.SerialWriteBufferRaw("G91") #set motion to relative
-    #         # self.SerialWriteBufferRaw("G1 Z" + str(self.nl_piston_hysteresis) + " F" + str(self.nl_piston_speed)) #move hysteresis down
-    #         # self.SerialWriteBufferRaw("G1 Z" + str(temp_hysteresis_clearance) + " F" + str(self.nl_piston_speed)) #move build pistons down clearance amount
-    #         # self.SerialWriteBufferRaw("G1 A" + str(self.nl_piston_hysteresis) + " F" + str(self.nl_piston_speed)) #move hysteresis down
-    #         # self.SerialWriteBufferRaw("G1 A" + str(temp_hysteresis_clearance) + " F" + str(self.nl_piston_speed)) #move feed pistons down clearance amount
-    #         # self.SerialWriteBufferRaw("G90") #set motion to absolute
-            
-            
-    #         #wait till state is not idle anymore
-    #         self.StatusIndexSet()
-    #         while (self.StatusIndexChanged() == 0):
-    #             time.sleep(0.005)
-    #         #print("Halt exited, state: " + self.motion_state)
-            
-    #         self.nl_state = 0 #set new layer state to in progress
-
     def NewLayer(self, temp_thickness, temp_override_build = 0):
         """Adds a new layer. Piston moves use hysteresis for backlash take-up only
         (net effect zero); clearance has been removed."""
@@ -481,20 +418,6 @@ class GRBL(serial.Serial):
             time.sleep(0.1) #wait for 0.1 seconds
             self.send_get_status = 1
             
-    def GetWindowOutput(self):
-        """returns the entire string of what was sent since the 
-        last call of this function, then clears that buffer"""
-        temp_return = self.window_output_buffer #write to return value
-        self.window_output_buffer = "" #clear buffer
-        return temp_return #return response
-        
-    def GetWindowInput(self):
-        """returns the entire string of what was received since the 
-        last call of this function, then clears that buffer"""
-        temp_return = self.window_input_buffer #write to return value
-        self.window_input_buffer = "" #clear buffer
-        return temp_return #return response
-        
     def StatusIndexSet(self):
         """Sets the current status index value, so later function will know if it changed"""
         self.motion_state_changed = 0

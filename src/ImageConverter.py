@@ -141,9 +141,6 @@ class ImageConverter():
                     self.image_array[h][w] = 0
                     
         
-    def Convert(self):
-        """Takes the threshold image and converts it to an inkjet image array"""
-    
     def SetDPI(self, temp_dpi):
         """Sets the dots per inch for the conversion"""
         self.dpi = temp_dpi

@@ -136,10 +136,6 @@ def B64FromSingle(temp_input):
                 return temp_return_value
     
     
-def B64FromArray(temp_input):
-    """Takes a string of B64 and turns it into an array of values from 0 to 64"""
-    #temp_return_value[] 
-
 def B64FromTestArray(temp_input):
     """Takes a string of B64 in test format and turns it into an array of of either 1 or 0"""
     temp_input = temp_input[::-1] #flip the array from LSB to MSB
