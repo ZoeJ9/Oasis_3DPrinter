@@ -6,3 +6,6 @@ __pycache__/
 logs/
 *.log
 Serial_*_log.txt
+*.png
+*.jpg
+*.jpeg
