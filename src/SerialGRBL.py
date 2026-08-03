@@ -323,19 +323,35 @@ class GRBL(serial.Serial):
             self.spreader_state = 0
             self.SerialWriteBufferRaw("M5") #set spreader to off
         
+    def BedDrop(self, drop_mm, feed):
+        """Drops the build piston by drop_mm to clear spreader/head from the
+        freshly spread bed before a return move. Sign matches NewLayer's
+        build-lower convention (positive Z = build down)."""
+        print(f"[BedDrop] called, drop_mm={drop_mm} feed={feed} connection_state={self.connection_state}")
+        self.SerialWriteBufferRaw("G91")
+        self.SerialWriteBufferRaw("G1 Z" + str(drop_mm) + " F" + str(feed))
+        self.SerialWriteBufferRaw("G90")
+
+    def BedRaise(self, drop_mm, feed):
+        """Reverses BedDrop by the same magnitude, restoring print Z."""
+        print(f"[BedRaise] called, drop_mm={drop_mm} feed={feed} connection_state={self.connection_state}")
+        self.SerialWriteBufferRaw("G91")
+        self.SerialWriteBufferRaw("G1 Z" + str(-drop_mm) + " F" + str(feed))
+        self.SerialWriteBufferRaw("G90")
+
     def NewLayer(self, temp_thickness, temp_override_build = 0):
-        """Adds a new layer. Piston moves use hysteresis for backlash take-up only
-        (net effect zero); clearance has been removed."""
+        """Adds a new layer. Piston moves lower by thickness minus clearance,
+        then clearance is restored after spreading (hysteresis for backlash take-up)."""
         if(self.homed_state == 1):
-            # --- piston 이동량 계산 (clearance 제거, hysteresis는 백래시용으로 유지) ---
+            # --- piston 이동량 계산 (clearance 적용, hysteresis는 백래시용으로 유지) ---
             if (temp_override_build == 0):
                 print("Normal new layer")
-                temp_b_feed_distance = temp_thickness - self.nl_piston_hysteresis
+                temp_b_feed_distance = temp_thickness - self.nl_piston_clearance - self.nl_piston_hysteresis
             else:
                 print("Only feed")
-                temp_b_feed_distance = -self.nl_piston_hysteresis
-            temp_f_feed_distance = (temp_thickness * self.nl_piston_overfeed * -1) - self.nl_piston_hysteresis
-            temp_hysteresis_clearance = -self.nl_piston_hysteresis   # clearance=0 이므로 순수 되돌림용
+                temp_b_feed_distance = (self.nl_piston_clearance * -1) - self.nl_piston_hysteresis
+            temp_f_feed_distance = (temp_thickness * self.nl_piston_overfeed * -1) - self.nl_piston_clearance - self.nl_piston_hysteresis
+            temp_hysteresis_clearance = self.nl_piston_clearance - self.nl_piston_hysteresis
 
             self.SerialGotoXY(self.nl_back_pos_x, self.nl_back_pos_y, self.nl_travel_speed) #move gantry to back
 

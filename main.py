@@ -1470,7 +1470,8 @@ class MainWindow(QtWidgets.QMainWindow):
         """
         import cv2
         import numpy as np
-        from dice_evaluator.constants import BED_DIAMETER_MM, BED_RADIUS_MM
+        BED_DIAMETER_MM = 84.0
+        BED_RADIUS_MM = 42.0
 
         captures_dir = self.camera_window.output_dir
         arr = self.imageconverter.image_array
@@ -2271,6 +2272,9 @@ class MainWindow(QtWidgets.QMainWindow):
                     time.sleep(0.1)
                     pass
 
+                # drop bed clearance before the return move to first sweep start
+                self.grbl.BedDrop(0.5, self.grbl.nl_piston_speed)
+
                 # v1.1.5 HOOK — save image_array for current layer as reference PNG + SVG
                 if hasattr(self, "camera_window"):
                     self.save_reference_png(self.current_layer)
@@ -2504,6 +2508,9 @@ class MainWindow(QtWidgets.QMainWindow):
                         self.grbl.SerialGotoXY(
                             self.sweep_x_pos, self.sweep_y_start_pos, self.travel_speed
                         )
+                        if L == 0 and _layer_pass == 0:
+                            # raise bed back to print Z before the first jet fires
+                            self.grbl.BedRaise(0.5, self.grbl.nl_piston_speed)
                         self.grbl.StatusIndexSet()  # set current status index
                         while True:  # wait till the printhead is at start position
                             time.sleep(0.1)
