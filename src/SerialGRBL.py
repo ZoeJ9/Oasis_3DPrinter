@@ -243,7 +243,7 @@ class GRBL(serial.Serial):
                 if (self.motion_state == 'idle'): #if printer is not moving
                     if (self.BufferLeft() == 0): #buffer must be fully drained before done
                         #if position is withing the bounds of the target
-                        if (self.motion_x_pos > self.nl_front_pos_x - self.nl_end_tolerance and self.motion_x_pos < self.nl_front_pos_x + self.nl_end_tolerance):
+                        if (self.motion_x_pos > self.nl_back_pos_x - self.nl_end_tolerance and self.motion_x_pos < self.nl_back_pos_x + self.nl_end_tolerance):
                             self.nl_state = 1 #set new layer to 1 (done)
                             print("new layer done")
                 
@@ -322,42 +322,26 @@ class GRBL(serial.Serial):
         else:
             self.spreader_state = 0
             self.SerialWriteBufferRaw("M5") #set spreader to off
-        
-    def BedDrop(self, drop_mm, feed):
-        """Drops the build piston by drop_mm to clear spreader/head from the
-        freshly spread bed before a return move. Sign matches NewLayer's
-        build-lower convention (positive Z = build down)."""
-        print(f"[BedDrop] called, drop_mm={drop_mm} feed={feed} connection_state={self.connection_state}")
-        self.SerialWriteBufferRaw("G91")
-        self.SerialWriteBufferRaw("G1 Z" + str(drop_mm) + " F" + str(feed))
-        self.SerialWriteBufferRaw("G90")
-
-    def BedRaise(self, drop_mm, feed):
-        """Reverses BedDrop by the same magnitude, restoring print Z."""
-        print(f"[BedRaise] called, drop_mm={drop_mm} feed={feed} connection_state={self.connection_state}")
-        self.SerialWriteBufferRaw("G91")
-        self.SerialWriteBufferRaw("G1 Z" + str(-drop_mm) + " F" + str(feed))
-        self.SerialWriteBufferRaw("G90")
-
-    def NewLayer(self, temp_thickness, temp_override_build = 0):
-        """Adds a new layer. Piston moves lower by thickness minus clearance,
-        then clearance is restored after spreading (hysteresis for backlash take-up)."""
+   
+def NewLayer(self, temp_thickness, temp_override_build = 0):
+        """Adds a new layer. Build bed drops by thickness and feed bed rises before
+        spreading; build bed then drops by clearance for the gantry return only and
+        is raised back before printing (hysteresis for backlash take-up)."""
         if(self.homed_state == 1):
-            # --- piston 이동량 계산 (clearance 적용, hysteresis는 백래시용으로 유지) ---
+            # --- piston 이동량 계산 (clearance는 return 구간에만 별도로 적용) ---
             if (temp_override_build == 0):
                 print("Normal new layer")
-                temp_b_feed_distance = temp_thickness - self.nl_piston_clearance - self.nl_piston_hysteresis
+                temp_b_feed_distance = temp_thickness + self.nl_piston_hysteresis
             else:
                 print("Only feed")
-                temp_b_feed_distance = (self.nl_piston_clearance * -1) - self.nl_piston_hysteresis
-            temp_f_feed_distance = (temp_thickness * self.nl_piston_overfeed * -1) - self.nl_piston_clearance - self.nl_piston_hysteresis
-            temp_hysteresis_clearance = self.nl_piston_clearance - self.nl_piston_hysteresis
+                temp_b_feed_distance = self.nl_piston_hysteresis   # 순 이동 0
+            temp_f_feed_distance = (temp_thickness * self.nl_piston_overfeed * -1) - self.nl_piston_hysteresis
 
             self.SerialGotoXY(self.nl_back_pos_x, self.nl_back_pos_y, self.nl_travel_speed) #move gantry to back
 
-            # --- build 내리고 feed 올리기 (앞에 hysteresis로 유격 소진) ---
+            # --- build 내리고 feed 올리기 (pre-move는 최종 접근 방향의 반대) ---
             self.SerialWriteBufferRaw("G91")
-            self.SerialWriteBufferRaw("G1 Z" + str(self.nl_piston_hysteresis) + " F" + str(self.nl_piston_speed)) #hysteresis down
+            self.SerialWriteBufferRaw("G1 Z" + str(self.nl_piston_hysteresis * -1) + " F" + str(self.nl_piston_speed)) #hysteresis up
             self.SerialWriteBufferRaw("G1 Z" + str(temp_b_feed_distance) + " F" + str(self.nl_piston_speed))       #build to position
             self.SerialWriteBufferRaw("G1 A" + str(self.nl_piston_hysteresis) + " F" + str(self.nl_piston_speed)) #hysteresis down
             self.SerialWriteBufferRaw("G1 A" + str(temp_f_feed_distance) + " F" + str(self.nl_piston_speed))       #feed to position
@@ -368,12 +352,18 @@ class GRBL(serial.Serial):
             self.SerialGotoXY(self.nl_front_pos_x, self.nl_back_pos_y, self.nl_feed_speed) #spread
             self.SpreaderSet(0)
 
-            # --- hysteresis 되돌리기 (순 이동 = thickness / feed, clearance 없음) ---
+            # --- return 전 build만 clearance 내리기 (feed는 정지) ---
+            # ponytail: 직전 이동과 같은 DOWN 방향이라 pre-move 불필요
             self.SerialWriteBufferRaw("G91")
-            self.SerialWriteBufferRaw("G1 Z" + str(self.nl_piston_hysteresis) + " F" + str(self.nl_piston_speed))
-            self.SerialWriteBufferRaw("G1 Z" + str(temp_hysteresis_clearance) + " F" + str(self.nl_piston_speed))
-            self.SerialWriteBufferRaw("G1 A" + str(self.nl_piston_hysteresis) + " F" + str(self.nl_piston_speed))
-            self.SerialWriteBufferRaw("G1 A" + str(temp_hysteresis_clearance) + " F" + str(self.nl_piston_speed))
+            self.SerialWriteBufferRaw("G1 Z" + str(self.nl_piston_clearance) + " F" + str(self.nl_piston_speed))
+            self.SerialWriteBufferRaw("G90")
+
+            self.SerialGotoXY(self.nl_back_pos_x, self.nl_back_pos_y, self.nl_travel_speed) #gantry return
+
+            # --- printing 전 clearance 복구 ---
+            self.SerialWriteBufferRaw("G91")
+            self.SerialWriteBufferRaw("G1 Z" + str(self.nl_piston_hysteresis) + " F" + str(self.nl_piston_speed)) #hysteresis down
+            self.SerialWriteBufferRaw("G1 Z" + str((self.nl_piston_clearance + self.nl_piston_hysteresis) * -1) + " F" + str(self.nl_piston_speed))
             self.SerialWriteBufferRaw("G90")
 
             self.StatusIndexSet()

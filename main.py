@@ -2272,9 +2272,6 @@ class MainWindow(QtWidgets.QMainWindow):
                     time.sleep(0.1)
                     pass
 
-                # drop bed clearance before the return move to first sweep start
-                self.grbl.BedDrop(0.5, self.grbl.nl_piston_speed)
-
                 # v1.1.5 HOOK — save image_array for current layer as reference PNG + SVG
                 if hasattr(self, "camera_window"):
                     self.save_reference_png(self.current_layer)
@@ -2508,9 +2505,6 @@ class MainWindow(QtWidgets.QMainWindow):
                         self.grbl.SerialGotoXY(
                             self.sweep_x_pos, self.sweep_y_start_pos, self.travel_speed
                         )
-                        if L == 0 and _layer_pass == 0:
-                            # raise bed back to print Z before the first jet fires
-                            self.grbl.BedRaise(0.5, self.grbl.nl_piston_speed)
                         self.grbl.StatusIndexSet()  # set current status index
                         while True:  # wait till the printhead is at start position
                             time.sleep(0.1)
