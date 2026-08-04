@@ -323,7 +323,7 @@ class GRBL(serial.Serial):
             self.spreader_state = 0
             self.SerialWriteBufferRaw("M5") #set spreader to off
    
-def NewLayer(self, temp_thickness, temp_override_build = 0):
+    def NewLayer(self, temp_thickness, temp_override_build = 0):
         """Adds a new layer. Build bed drops by thickness and feed bed rises before
         spreading; build bed then drops by clearance for the gantry return only and
         is raised back before printing (hysteresis for backlash take-up)."""
