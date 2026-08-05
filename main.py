@@ -2172,9 +2172,9 @@ class MainWindow(QtWidgets.QMainWindow):
         # ConfigRunner resets current_layer to 1 at each step start,
         # so this correctly handles the per-step SVG replay.
         if self.current_layer <= self.imageconverter.svg_layers:
-            next_h    = self.imageconverter.svg_layer_height[self.current_layer - 1]
-            self._pending_layer_thickness = next_h - self.current_layer_height
-            self.current_layer_height     = next_h
+            fixed_thickness = float(self.form.motion_layer_thickness.value()) * 0.05
+            self._pending_layer_thickness = fixed_thickness
+            self.current_layer_height    += fixed_thickness
         else:
             self._pending_layer_thickness = None
 
@@ -2610,14 +2610,9 @@ class MainWindow(QtWidgets.QMainWindow):
                     self._config_log_capture(self.current_layer - 1, "post", _fname)
 
                 # Add next layer — nl_state set to 0 inside NewLayer()
-                temp_layer_thickness = (
-                    self.imageconverter.svg_layer_height[self.current_layer]
-                    - self.current_layer_height
-                )
+                temp_layer_thickness = float(self.form.motion_layer_thickness.value()) * 0.05
                 print("Adding new layer, thickness: " + str(temp_layer_thickness))
-                self.current_layer_height = self.imageconverter.svg_layer_height[
-                    self.current_layer
-                ]
+                self.current_layer_height += temp_layer_thickness
                 self.grbl.NewLayer(temp_layer_thickness)
 
             # if all layers printed or stop button pressed, exit
