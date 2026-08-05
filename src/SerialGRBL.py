@@ -74,7 +74,7 @@ class GRBL(serial.Serial):
         
         self.nl_piston_hysteresis = 0.5 # was 1.00mm how much the piston needs to move down before it can move up
 
-        self.nl_piston_overfeed = 1 #1.1 #the fraction which feed supplies more than built takes
+        self.nl_piston_overfeed = 3.5 #1.1 #the fraction which feed supplies more than built takes
         
         self.nl_end_tolerance = 10.0 #how close to the end pos the gantry needs to be to consider new layer done
         self.nl_state = 1  #state of new layer, 1 is done, 0 is in progress
