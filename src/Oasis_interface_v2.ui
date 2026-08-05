@@ -178,7 +178,7 @@
        <!-- Row 7: overfeed label + set button -->
        <item row="7" column="0" colspan="3">
         <widget class="QLabel" name="motion_overfeed_value">
-         <property name="text"><string>Overfeed: 350%</string></property>
+         <property name="text"><string>Overfeed: 250%</string></property>
         </widget>
        </item>
        <item row="7" column="3">
@@ -191,7 +191,7 @@
         <widget class="QSlider" name="motion_overfeed">
          <property name="minimum"><number>0</number></property>
          <property name="maximum"><number>20</number></property>
-         <property name="value"><number>10</number></property>
+         <property name="value"><number>0</number></property>
          <property name="orientation"><enum>Qt::Horizontal</enum></property>
         </widget>
        </item>
