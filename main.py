@@ -1222,7 +1222,7 @@ class MainWindow(QtWidgets.QMainWindow):
     def UpdateOverfeedSliderValue(self):
         """Updates the value next to the overfeed slider"""
         temp_slider = self.form.motion_overfeed.value()
-        temp_slider = 80 + (temp_slider * 5)
+        temp_slider = 250 + (temp_slider * 10)
         self.form.motion_overfeed_value.setText(f"Overfeed: {temp_slider}%")
 
     def GRBLSpreader(self):
@@ -1258,7 +1258,7 @@ class MainWindow(QtWidgets.QMainWindow):
     def GRBLSetOverfeed(self):
         """set overfeed"""
         temp_overfeed = self.form.motion_overfeed.value()
-        temp_overfeed = 80 + (temp_overfeed * 5)
+        temp_overfeed = 250 + (temp_overfeed * 10)
 
         self.grbl.SetOverfeed(temp_overfeed)
 
@@ -1979,8 +1979,9 @@ class MainWindow(QtWidgets.QMainWindow):
             start_layer = self._init_print_state()
             self.inkjet.SetDPI(self.printing_dpi)
 
-            # Wait for homing
-            while self.grbl.motion_state != "idle":
+            # Wait for homing — motion_state can hit "idle" before the G92
+            # that sets homed_state=1 has been sent/acked, so check both.
+            while self.grbl.motion_state != "idle" or self.grbl.homed_state != 1:
                 time.sleep(0.1)
             time.sleep(0.25)
             self.InkjetSetPosition()
@@ -2228,8 +2229,9 @@ class MainWindow(QtWidgets.QMainWindow):
             print("Starting print at height: " + str(self.current_layer_height))
             self.inkjet.SetDPI(self.printing_dpi)
 
-            # Wait till homing is done
-            while self.grbl.motion_state != "idle":
+            # Wait till homing is done — motion_state can hit "idle" before the
+            # G92 that sets homed_state=1 has been sent/acked, so check both.
+            while self.grbl.motion_state != "idle" or self.grbl.homed_state != 1:
                 time.sleep(0.1)
 
             time.sleep(0.25)  # extra delay so the system can stabilize

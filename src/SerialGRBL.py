@@ -69,10 +69,10 @@ class GRBL(serial.Serial):
         self.nl_feed_speed = 6000.0 #how fast new layer feeds (default 3000)
 
         self.nl_piston_speed = 200.0 #how fast the pistons move
-        self.nl_piston_clearance = 0.1 #0.05 # was 0.25mm how much the pistons lower after a new layer to clear the spreader
+        self.nl_piston_clearance = 0.5 #0.05 # was 0.25mm how much the pistons lower after a new layer to clear the spreader
         #this will stop the layers from smearing when the layer comes back...
         
-        self.nl_piston_hysteresis = 0.5 # was 1.00mm how much the piston needs to move down before it can move up
+        self.nl_piston_hysteresis = 2 # was 1.00mm how much the piston needs to move down before it can move up
 
         self.nl_piston_overfeed = 3.5 #1.1 #the fraction which feed supplies more than built takes
         
@@ -331,20 +331,20 @@ class GRBL(serial.Serial):
             # --- piston 이동량 계산 (clearance는 return 구간에만 별도로 적용) ---
             if (temp_override_build == 0):
                 print("Normal new layer")
-                temp_b_feed_distance = temp_thickness + self.nl_piston_hysteresis
+                temp_b_feed_distance = temp_thickness
             else:
                 print("Only feed")
                 temp_b_feed_distance = self.nl_piston_hysteresis   # 순 이동 0
-            temp_f_feed_distance = (temp_thickness * self.nl_piston_overfeed * -1) - self.nl_piston_hysteresis
+            temp_f_feed_distance = (temp_thickness * self.nl_piston_overfeed * -1)
 
             self.SerialGotoXY(self.nl_back_pos_x, self.nl_back_pos_y, self.nl_travel_speed) #move gantry to back
 
             # --- build 내리고 feed 올리기 (pre-move는 최종 접근 방향의 반대) ---
             self.SerialWriteBufferRaw("G91")
-            self.SerialWriteBufferRaw("G1 Z" + str(self.nl_piston_hysteresis * -1) + " F" + str(self.nl_piston_speed)) #hysteresis up
-            self.SerialWriteBufferRaw("G1 Z" + str(temp_b_feed_distance) + " F" + str(self.nl_piston_speed))       #build to position
-            self.SerialWriteBufferRaw("G1 A" + str(self.nl_piston_hysteresis) + " F" + str(self.nl_piston_speed)) #hysteresis down
-            self.SerialWriteBufferRaw("G1 A" + str(temp_f_feed_distance) + " F" + str(self.nl_piston_speed))       #feed to position
+            #self.SerialWriteBufferRaw("G1 Z" + str(self.nl_piston_hysteresis * -1) + " F" + str(self.nl_piston_speed)) #hysteresis up
+            self.SerialWriteBufferRaw("G1 Z" + str(temp_thickness) + " F" + str(self.nl_piston_speed))       #build to position
+            #self.SerialWriteBufferRaw("G1 A" + str(self.nl_piston_hysteresis) + " F" + str(self.nl_piston_speed)) #hysteresis down
+            self.SerialWriteBufferRaw("G1 A" + str(temp_thickness * 1.1 * self.nl_piston_overfeed * -1) + " F" + str(self.nl_piston_speed))       #feed to position
             self.SerialWriteBufferRaw("G90")
             #self.SerialWriteBufferRaw("G4 P2")
 
@@ -363,11 +363,11 @@ class GRBL(serial.Serial):
             self.SerialGotoXY(self.nl_back_pos_x, self.nl_back_pos_y, self.nl_travel_speed) #gantry return
 
             # --- printing 전 clearance 복구 ---
-            self.SerialWriteBufferRaw("G91")
-            self.SerialWriteBufferRaw("G1 Z" + str(self.nl_piston_hysteresis) + " F" + str(self.nl_piston_speed)) #hysteresis down
+            #self.SerialWriteBufferRaw("G91")
+            #self.SerialWriteBufferRaw("G1 Z" + str(self.nl_piston_hysteresis) + " F" + str(self.nl_piston_speed)) #hysteresis down
             #self.SerialWriteBufferRaw("G4 P2")
-            self.SerialWriteBufferRaw("G1 Z" + str((self.nl_piston_clearance + self.nl_piston_hysteresis) * -1) + " F" + str(self.nl_piston_speed))
-            self.SerialWriteBufferRaw("G90")
+            #self.SerialWriteBufferRaw("G1 Z" + str((self.nl_piston_hysteresis) * -1) + " F" + str(self.nl_piston_speed))
+            #self.SerialWriteBufferRaw("G90")
 
             self.StatusIndexSet()
             while (self.StatusIndexChanged() == 0):
@@ -377,7 +377,7 @@ class GRBL(serial.Serial):
     def SetOverfeed(self, temp_percent):
         """sets the percentage of overfeed, 100% is 1mm of feed for every 1mm of build, 110% is 1.1mm of feed for every 1mm of build"""
         temp_percent = float(temp_percent / 100)
-        nl_piston_overfeed = temp_percent
+        self.nl_piston_overfeed = temp_percent
         #print(f'overfeed set to {nl_piston_overfeed}')
         
         
