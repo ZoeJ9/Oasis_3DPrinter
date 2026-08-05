@@ -1990,7 +1990,9 @@ class MainWindow(QtWidgets.QMainWindow):
             # Spread first layer only when starting from layer 1
             if start_layer == 1:
                 print("--- Spreading initial powder layer ---")
-                self.grbl.NewLayer(self.imageconverter.svg_layer_height[0])
+                first_layer_thickness = float(self.form.motion_layer_thickness.value()) * 0.05
+                self.grbl.NewLayer(first_layer_thickness)
+                self.current_layer_height = first_layer_thickness
                 while self.grbl.nl_state == 0:
                     time.sleep(0.1)
                 print("--- Initial spread done ---")
@@ -2245,7 +2247,9 @@ class MainWindow(QtWidgets.QMainWindow):
             # correct height — skip spreading and start printing immediately.
             if start_layer == 1:
                 print("--- Spreading initial powder layer ---")
-                self.grbl.NewLayer(self.imageconverter.svg_layer_height[0])
+                first_layer_thickness = float(self.form.motion_layer_thickness.value()) * 0.05
+                self.grbl.NewLayer(first_layer_thickness)
+                self.current_layer_height = first_layer_thickness
                 while self.grbl.nl_state == 0:
                     time.sleep(0.1)
                 print("--- Initial spread done, capturing photo ---")
