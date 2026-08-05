@@ -69,12 +69,12 @@ class GRBL(serial.Serial):
         self.nl_feed_speed = 6000.0 #how fast new layer feeds (default 3000)
 
         self.nl_piston_speed = 200.0 #how fast the pistons move
-        self.nl_piston_clearance = 0.5 #0.05 # was 0.25mm how much the pistons lower after a new layer to clear the spreader
+        self.nl_piston_clearance = 1 #0.05 # was 0.25mm how much the pistons lower after a new layer to clear the spreader
         #this will stop the layers from smearing when the layer comes back...
         
         self.nl_piston_hysteresis = 2 # was 1.00mm how much the piston needs to move down before it can move up
 
-        self.nl_piston_overfeed = 3.5 #1.1 #the fraction which feed supplies more than built takes
+        self.nl_piston_overfeed = 2.5 #1.1 #the fraction which feed supplies more than built takes
         
         self.nl_end_tolerance = 10.0 #how close to the end pos the gantry needs to be to consider new layer done
         self.nl_state = 1  #state of new layer, 1 is done, 0 is in progress
@@ -344,7 +344,7 @@ class GRBL(serial.Serial):
             #self.SerialWriteBufferRaw("G1 Z" + str(self.nl_piston_hysteresis * -1) + " F" + str(self.nl_piston_speed)) #hysteresis up
             self.SerialWriteBufferRaw("G1 Z" + str(temp_thickness) + " F" + str(self.nl_piston_speed))       #build to position
             #self.SerialWriteBufferRaw("G1 A" + str(self.nl_piston_hysteresis) + " F" + str(self.nl_piston_speed)) #hysteresis down
-            self.SerialWriteBufferRaw("G1 A" + str(temp_thickness * 1.5 * self.nl_piston_overfeed * -1) + " F" + str(self.nl_piston_speed))       #feed to position
+            self.SerialWriteBufferRaw("G1 A" + str(temp_thickness * 2 * self.nl_piston_overfeed * -1) + " F" + str(self.nl_piston_speed))       #feed to position
             self.SerialWriteBufferRaw("G90")
             #self.SerialWriteBufferRaw("G4 P2")
 
@@ -361,8 +361,13 @@ class GRBL(serial.Serial):
             #self.SerialWriteBufferRaw("G4 P2")
 
             self.SerialGotoXY(self.nl_back_pos_x, self.nl_back_pos_y, self.nl_travel_speed) #gantry return
+            #self.SerialWriteBufferRaw("G4 P2")
 
             # --- printing 전 clearance 복구 ---
+            self.SerialWriteBufferRaw("G91")
+            self.SerialWriteBufferRaw("G1 Z" + str((self.nl_piston_clearance) * -1) + " F" + str(self.nl_piston_speed))
+            self.SerialWriteBufferRaw("G90")
+
             #self.SerialWriteBufferRaw("G91")
             #self.SerialWriteBufferRaw("G1 Z" + str(self.nl_piston_hysteresis) + " F" + str(self.nl_piston_speed)) #hysteresis down
             #self.SerialWriteBufferRaw("G4 P2")
