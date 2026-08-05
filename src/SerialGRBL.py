@@ -344,7 +344,7 @@ class GRBL(serial.Serial):
             #self.SerialWriteBufferRaw("G1 Z" + str(self.nl_piston_hysteresis * -1) + " F" + str(self.nl_piston_speed)) #hysteresis up
             self.SerialWriteBufferRaw("G1 Z" + str(temp_thickness) + " F" + str(self.nl_piston_speed))       #build to position
             #self.SerialWriteBufferRaw("G1 A" + str(self.nl_piston_hysteresis) + " F" + str(self.nl_piston_speed)) #hysteresis down
-            self.SerialWriteBufferRaw("G1 A" + str(temp_thickness * 1.1 * self.nl_piston_overfeed * -1) + " F" + str(self.nl_piston_speed))       #feed to position
+            self.SerialWriteBufferRaw("G1 A" + str(temp_thickness * 1.5 * self.nl_piston_overfeed * -1) + " F" + str(self.nl_piston_speed))       #feed to position
             self.SerialWriteBufferRaw("G90")
             #self.SerialWriteBufferRaw("G4 P2")
 
