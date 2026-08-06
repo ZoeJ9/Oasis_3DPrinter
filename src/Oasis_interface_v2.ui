@@ -153,7 +153,7 @@
        <!-- Row 5: New layer label + button -->
        <item row="5" column="0" colspan="3">
         <widget class="QLabel" name="motion_layer_value">
-         <property name="text"><string>New layer: 0.10 mm</string></property>
+         <property name="text"><string>New layer: 0.125 mm</string></property>
         </widget>
        </item>
        <item row="5" column="3">
@@ -166,7 +166,7 @@
         <widget class="QSlider" name="motion_layer_thickness">
          <property name="minimum"><number>1</number></property>
          <property name="maximum"><number>50</number></property>
-         <property name="value"><number>2</number></property>
+         <property name="value"><number>5</number></property>
          <property name="orientation"><enum>Qt::Horizontal</enum></property>
         </widget>
        </item>

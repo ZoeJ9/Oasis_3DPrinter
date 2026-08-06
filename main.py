@@ -1216,7 +1216,7 @@ class MainWindow(QtWidgets.QMainWindow):
     def UpdateLayerSliderValue(self):
         """Updates the value next to the new layer slider"""
         temp_slider = float(self.form.motion_layer_thickness.value())
-        temp_slider = temp_slider * 0.05
+        temp_slider = temp_slider * 0.025
         self.form.motion_layer_value.setText(f"New layer: {temp_slider:.2f} mm")
 
     def UpdateOverfeedSliderValue(self):
@@ -1240,7 +1240,7 @@ class MainWindow(QtWidgets.QMainWindow):
         if self.grbl_connection_state == 1:
             # print("new layer")
             temp_layer_thickness_val = float(self.form.motion_layer_thickness.value())
-            temp_layer_thickness_val = temp_layer_thickness_val * 0.05
+            temp_layer_thickness_val = temp_layer_thickness_val * 0.025
 
             # print("adding new layer: " + str(temp_layer_thickness_val))
             self.grbl.NewLayer(temp_layer_thickness_val)
@@ -1250,7 +1250,7 @@ class MainWindow(QtWidgets.QMainWindow):
         if self.grbl_connection_state == 1:
             # print("new layer")
             temp_layer_thickness_val = float(self.form.motion_layer_thickness.value())
-            temp_layer_thickness_val = temp_layer_thickness_val * 0.05
+            temp_layer_thickness_val = temp_layer_thickness_val * 0.025
 
             # print("adding new layer: " + str(temp_layer_thickness_val))
             self.grbl.NewLayer(temp_layer_thickness_val, 1)
@@ -1687,7 +1687,7 @@ class MainWindow(QtWidgets.QMainWindow):
         time.sleep(0.25)
 
         # CALIB HOOK — spread one powder layer before printing
-        calib_layer_thickness = float(self.form.motion_layer_thickness.value()) * 0.05
+        calib_layer_thickness = float(self.form.motion_layer_thickness.value()) * 0.025
         print(f"CALIB: Spreading powder layer (thickness={calib_layer_thickness:.2f} mm)")
         self.grbl.NewLayer(calib_layer_thickness)
         while self.grbl.nl_state == 0:  # same polling pattern as main print loop
@@ -1990,7 +1990,7 @@ class MainWindow(QtWidgets.QMainWindow):
             # Spread first layer only when starting from layer 1
             if start_layer == 1:
                 print("--- Spreading initial powder layer ---")
-                first_layer_thickness = float(self.form.motion_layer_thickness.value()) * 0.05
+                first_layer_thickness = float(self.form.motion_layer_thickness.value()) * 0.025
                 self.grbl.NewLayer(first_layer_thickness)
                 self.current_layer_height = first_layer_thickness
                 while self.grbl.nl_state == 0:
@@ -2175,7 +2175,7 @@ class MainWindow(QtWidgets.QMainWindow):
         # ConfigRunner resets current_layer to 1 at each step start,
         # so this correctly handles the per-step SVG replay.
         if self.current_layer <= self.imageconverter.svg_layers:
-            fixed_thickness = float(self.form.motion_layer_thickness.value()) * 0.05
+            fixed_thickness = float(self.form.motion_layer_thickness.value()) * 0.025
             self._pending_layer_thickness = fixed_thickness
             self.current_layer_height    += fixed_thickness
         else:
@@ -2247,7 +2247,7 @@ class MainWindow(QtWidgets.QMainWindow):
             # correct height — skip spreading and start printing immediately.
             if start_layer == 1:
                 print("--- Spreading initial powder layer ---")
-                first_layer_thickness = float(self.form.motion_layer_thickness.value()) * 0.05
+                first_layer_thickness = float(self.form.motion_layer_thickness.value()) * 0.025
                 self.grbl.NewLayer(first_layer_thickness)
                 self.current_layer_height = first_layer_thickness
                 while self.grbl.nl_state == 0:
@@ -2616,7 +2616,7 @@ class MainWindow(QtWidgets.QMainWindow):
                     self._config_log_capture(self.current_layer - 1, "post", _fname)
 
                 # Add next layer — nl_state set to 0 inside NewLayer()
-                temp_layer_thickness = float(self.form.motion_layer_thickness.value()) * 0.05
+                temp_layer_thickness = float(self.form.motion_layer_thickness.value()) * 0.025
                 print("Adding new layer, thickness: " + str(temp_layer_thickness))
                 self.current_layer_height += temp_layer_thickness
                 self.grbl.NewLayer(temp_layer_thickness)
