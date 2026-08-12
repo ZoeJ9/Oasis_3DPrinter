@@ -207,13 +207,15 @@ class CameraController(QtWidgets.QWidget):
         form_layout.addRow("Camera:", cam_row)
         self._populate_cameras()
 
-        self.exposure_spin = QtWidgets.QSpinBox()
-        self.exposure_spin.setRange(-7, -1)
-        self.exposure_spin.setValue(self.exposure_value)
-        self.exposure_spin.setSuffix("  (log₂ s)")
-        self.exposure_spin.setToolTip("Camera exposure: -3 = 1/8s, -6 = 1/64s")
-        self.exposure_spin.valueChanged.connect(lambda v: setattr(self, "exposure_value", v))
-        form_layout.addRow("Exposure:", self.exposure_spin)
+        # Exposure control disabled — manual exposure set() calls were a
+        # bottleneck/hang source on the new UVC camera (see _open_camera).
+        # self.exposure_spin = QtWidgets.QSpinBox()
+        # self.exposure_spin.setRange(-7, -1)
+        # self.exposure_spin.setValue(self.exposure_value)
+        # self.exposure_spin.setSuffix("  (log₂ s)")
+        # self.exposure_spin.setToolTip("Camera exposure: -3 = 1/8s, -6 = 1/64s")
+        # self.exposure_spin.valueChanged.connect(lambda v: setattr(self, "exposure_value", v))
+        # form_layout.addRow("Exposure:", self.exposure_spin)
 
         self.resolution_combo = QtWidgets.QComboBox()
         self._resolutions = [
