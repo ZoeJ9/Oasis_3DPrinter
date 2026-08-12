@@ -449,10 +449,10 @@ class CameraController(QtWidgets.QWidget):
         cap.set(cv2.CAP_PROP_FOURCC, cv2.VideoWriter_fourcc(*"MJPG"))
         cap.set(cv2.CAP_PROP_FRAME_WIDTH,  self.capture_width)
         cap.set(cv2.CAP_PROP_FRAME_HEIGHT, self.capture_height)
-        cap.set(cv2.CAP_PROP_AUTO_EXPOSURE, AUTO_EXPOSURE_MANUAL)
-        cap.set(cv2.CAP_PROP_EXPOSURE,      self.exposure_value)
+        # cap.set(cv2.CAP_PROP_AUTO_EXPOSURE, AUTO_EXPOSURE_MANUAL)
+        # cap.set(cv2.CAP_PROP_EXPOSURE,      self.exposure_value)
         cap.set(cv2.CAP_PROP_GAIN,          GAIN_VALUE)
-        cap.set(cv2.CAP_PROP_AUTO_WB,       AUTO_WB)
+        # cap.set(cv2.CAP_PROP_AUTO_WB,       AUTO_WB)
         # Keep FPS maxed — locking it to 1 forces a 1s stall per LED
         cap.set(cv2.CAP_PROP_FPS, 30)
         # Force the driver's internal buffer down to a single frame — a few
@@ -565,8 +565,8 @@ class CameraController(QtWidgets.QWidget):
                 return
             cap.set(cv2.CAP_PROP_FRAME_WIDTH,  1280)
             cap.set(cv2.CAP_PROP_FRAME_HEIGHT, 720)
-            cap.set(cv2.CAP_PROP_AUTO_EXPOSURE, AUTO_EXPOSURE_MANUAL)
-            cap.set(cv2.CAP_PROP_EXPOSURE, self.exposure_value)
+            # cap.set(cv2.CAP_PROP_AUTO_EXPOSURE, AUTO_EXPOSURE_MANUAL)
+            # cap.set(cv2.CAP_PROP_EXPOSURE, self.exposure_value)
             for _ in range(3):   # flush stale buffer frames
                 cap.grab()
             ret, frame = cap.read()
