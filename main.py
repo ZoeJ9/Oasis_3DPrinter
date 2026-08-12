@@ -448,7 +448,9 @@ class CameraController(QtWidgets.QWidget):
 
         # Apply settings only once, right after open — repeating them in the
         # LED loop causes DSHOW delays
-        cap.set(cv2.CAP_PROP_FOURCC, cv2.VideoWriter_fourcc(*"MJPG"))
+        # MJPG forced FourCC suspected of causing black frames on the new
+        # camera — testing with driver default format instead
+        # cap.set(cv2.CAP_PROP_FOURCC, cv2.VideoWriter_fourcc(*"MJPG"))
         cap.set(cv2.CAP_PROP_FRAME_WIDTH,  self.capture_width)
         cap.set(cv2.CAP_PROP_FRAME_HEIGHT, self.capture_height)
         cap.set(cv2.CAP_PROP_AUTO_EXPOSURE, 0.75)  # auto — force out of any stuck manual state
