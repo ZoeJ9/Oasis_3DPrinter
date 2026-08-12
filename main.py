@@ -569,11 +569,11 @@ class CameraController(QtWidgets.QWidget):
             cap.set(cv2.CAP_PROP_FRAME_HEIGHT, 720)
             cap.set(cv2.CAP_PROP_AUTO_EXPOSURE, 0.75)  # auto — force out of any stuck manual state
             # cap.set(cv2.CAP_PROP_EXPOSURE, self.exposure_value)
-            for _ in range(3):   # flush stale buffer frames
-                cap.grab()
-            ret, frame = cap.read()
+            # grab()+retrieve() can return stale/black frames on this
+            # DSHOW/MJPG combo (see _grab_frame) — use read() repeatedly instead
+            frame = self._grab_frame(cap, cv2)
             cap.release()
-            if ret and frame is not None:
+            if frame is not None:
                 frame = cv2.rotate(frame, cv2.ROTATE_90_COUNTERCLOCKWISE)
                 corrector = get_fisheye_corrector()
                 if corrector is not None:
