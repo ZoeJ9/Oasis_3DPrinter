@@ -448,12 +448,13 @@ class CameraController(QtWidgets.QWidget):
 
         # Apply settings only once, right after open — repeating them in the
         # LED loop causes DSHOW delays
-        # MJPG forced FourCC suspected of causing black frames on the new
-        # camera — testing with driver default format instead
-        # cap.set(cv2.CAP_PROP_FOURCC, cv2.VideoWriter_fourcc(*"MJPG"))
+        cap.set(cv2.CAP_PROP_FOURCC, cv2.VideoWriter_fourcc(*"MJPG"))
         cap.set(cv2.CAP_PROP_FRAME_WIDTH,  self.capture_width)
         cap.set(cv2.CAP_PROP_FRAME_HEIGHT, self.capture_height)
-        cap.set(cv2.CAP_PROP_AUTO_EXPOSURE, 0.75)  # auto — force out of any stuck manual state
+        # Test: 0.75 (legacy DSHOW auto-exposure convention) may not be
+        # honored by this camera's UVC driver — leaving unset to use
+        # whatever the driver defaults to on open
+        # cap.set(cv2.CAP_PROP_AUTO_EXPOSURE, 0.75)
         # cap.set(cv2.CAP_PROP_EXPOSURE,      self.exposure_value)
         # cap.set(cv2.CAP_PROP_GAIN,          GAIN_VALUE)
         # cap.set(cv2.CAP_PROP_AUTO_WB,       AUTO_WB)
@@ -569,7 +570,7 @@ class CameraController(QtWidgets.QWidget):
                 return
             cap.set(cv2.CAP_PROP_FRAME_WIDTH,  1280)
             cap.set(cv2.CAP_PROP_FRAME_HEIGHT, 720)
-            cap.set(cv2.CAP_PROP_AUTO_EXPOSURE, 0.75)  # auto — force out of any stuck manual state
+            # cap.set(cv2.CAP_PROP_AUTO_EXPOSURE, 0.75)
             # cap.set(cv2.CAP_PROP_EXPOSURE, self.exposure_value)
             # grab()+retrieve() can return stale/black frames on this
             # DSHOW/MJPG combo (see _grab_frame) — use read() repeatedly instead
