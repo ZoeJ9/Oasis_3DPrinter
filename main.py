@@ -733,7 +733,7 @@ class MainWindow(QtWidgets.QMainWindow):
         self.mid_print_clean_sequence = [("preheat", 3), ("prime", 3)] # fixed short sequence for mid-print cleans
 
         ## PARAMETER FOR REPEATING LAYER (NUMBER OF TIMES IT REITERATES THE PATTERN BEFORE RESETTING LAYER)
-        self.layer_passes = 3  # repeat each layer this many times before Z advances
+        self.layer_passes = 5  # repeat each layer this many times before Z advances
 
         self.RefreshPorts()  # get com ports for the buttons
 
@@ -2517,6 +2517,7 @@ class MainWindow(QtWidgets.QMainWindow):
                             self.sweep_x_pos, self.sweep_y_start_pos, self.travel_speed
                         )
                         self.grbl.StatusIndexSet()  # set current status index
+                        _sweep_wait_start = time.time()
                         while True:  # wait till the printhead is at start position
                             time.sleep(0.1)
                             if (
@@ -2525,6 +2526,12 @@ class MainWindow(QtWidgets.QMainWindow):
                             ):
                                 # print("break conditions for print while loop")
                                 break  # break if exit conditions met
+                            if self.grbl.error_state == 1:
+                                print("PRINT ABORTED: GRBL reported an error while moving to sweep start")
+                                break
+                            if time.time() - _sweep_wait_start > 30:
+                                print("PRINT WARNING: timed out waiting for sweep-start move to finish (30s)")
+                                break
 
                         # wait till inkjet is loaded and motion is done
                         while self.inkjet.BufferLeft() > 0:
@@ -2868,8 +2875,14 @@ class MainWindow(QtWidgets.QMainWindow):
                 # print(self.inkjet_line_buffer)
 
                 # wait till the head is idle
+                _idle_wait_start = time.time()
                 while self.grbl.motion_state != "idle":
-                    nothing = 0
+                    if self.grbl.error_state == 1:
+                        print("PRINT ABORTED: GRBL reported an error while waiting for idle")
+                        break
+                    if time.time() - _idle_wait_start > 30:
+                        print("PRINT WARNING: timed out waiting for GRBL idle (30s)")
+                        break
                 print("break from idle, moving to filling buffers")
 
                 # match inkjet and printer pos
