@@ -2534,9 +2534,15 @@ class MainWindow(QtWidgets.QMainWindow):
                                 break
 
                         # wait till inkjet is loaded and motion is done
+                        _inkjet_wait_start = time.time()
                         while self.inkjet.BufferLeft() > 0:
                             time.sleep(0.1)
-                            pass
+                            if self.inkjet.connection_state == 0:
+                                print("PRINT ABORTED: HP45 disconnected while waiting for inkjet buffer to drain")
+                                break
+                            if time.time() - _inkjet_wait_start > 30:
+                                print("PRINT WARNING: timed out waiting for inkjet buffer to drain (30s)")
+                                break
 
                         # set current position to inkjet
                         print("LABABBUBU")
