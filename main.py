@@ -507,10 +507,12 @@ class CameraController(QtWidgets.QWidget):
         import cv2
 
         try:
+            print("CAMERA: opening capture device...")
             cap = self._open_camera(cv2)
             if cap is None:
                 print(f"CAMERA: Could not open port {self.camera_port}")
                 return
+            print("CAMERA: device opened, warm-up done")
 
             # Make sure stale frames are flushed right after open
             time.sleep(0.3)
@@ -521,10 +523,13 @@ class CameraController(QtWidgets.QWidget):
 
             for led_n in led_indices:
                 if led_n > 0:
+                    print(f"CAMERA: turning on LED {led_n}...")
                     self._led_on(led_n, wait_ack=True)
                 time.sleep(LED_SETTLE_MS / 1000.0)
 
+                print(f"CAMERA: grabbing frame for LED {led_n}...")
                 frame = self._grab_frame(cap, cv2)
+                print(f"CAMERA: frame grab returned for LED {led_n}")
 
                 if frame is None:
                     print(f"CAMERA: Failed to read frame (LED {led_n}).")
