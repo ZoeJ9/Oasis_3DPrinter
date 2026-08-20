@@ -2546,7 +2546,12 @@ class MainWindow(QtWidgets.QMainWindow):
                                 print("PRINT ABORTED: HP45 disconnected while waiting for inkjet buffer to drain")
                                 break
                             if time.time() - _inkjet_wait_start > 30:
-                                print("PRINT WARNING: timed out waiting for inkjet buffer to drain (30s)")
+                                print(
+                                    "PRINT WARNING: timed out waiting for inkjet buffer to drain (30s) — "
+                                    f"BufferLeft={self.inkjet.BufferLeft()} "
+                                    f"writeleft={self.inkjet.inkjet_writeleft} "
+                                    f"ok_state={self.inkjet.ok_state}"
+                                )
                                 break
 
                         # set current position to inkjet
